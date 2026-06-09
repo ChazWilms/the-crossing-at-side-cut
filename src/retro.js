@@ -27,12 +27,19 @@ export function applyRetroMaterial(material) {
       .replace(
         '#include <project_vertex>',
         `#include <project_vertex>
-        gl_Position.xyz /= gl_Position.w;
-        gl_Position.xy = floor(gl_Position.xy * uSnap) / uSnap;
-        gl_Position.xyz *= gl_Position.w;
-        vAffineW = gl_Position.w;
+        // Snap only in front of the camera (negative w mirrors vertices
+        // behind the near plane), and fade the snap out as w approaches
+        // zero — a hard cutoff folds triangles whose vertices straddle it.
+        if (gl_Position.w > 0.0) {
+          vec3 ndc = gl_Position.xyz / gl_Position.w;
+          vec2 snapped = floor(ndc.xy * uSnap) / uSnap;
+          float snapFade = clamp((gl_Position.w - 0.3) / 0.7, 0.0, 1.0);
+          ndc.xy = mix(ndc.xy, snapped, snapFade);
+          gl_Position.xyz = ndc * gl_Position.w;
+        }
+        vAffineW = max(gl_Position.w, 0.001);
         #ifdef USE_MAP
-          vMapUv *= gl_Position.w;
+          vMapUv *= vAffineW;
         #endif`
       );
 

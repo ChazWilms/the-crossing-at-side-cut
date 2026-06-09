@@ -128,3 +128,21 @@ export function parkingLotTexture() {
 export function concreteTexture(repeat) {
   return noiseTexture('#9a9588', ['#8d8a7e', '#a8a294', '#827d70', '#b3ac9c'], 0.4, repeat);
 }
+
+// Transparent grass blades for cross-quad tufts (used with alphaTest).
+export function grassBladeTexture() {
+  return makeCanvasTexture((ctx) => {
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    const greens = ['#5a7040', '#4a5d33', '#6d8450', '#74683c'];
+    for (let i = 0; i < 14; i++) {
+      const x = 4 + Math.random() * (SIZE - 8);
+      const top = 10 + Math.random() * 26;
+      ctx.strokeStyle = greens[Math.floor(Math.random() * greens.length)];
+      ctx.lineWidth = 2 + Math.random() * 2;
+      ctx.beginPath();
+      ctx.moveTo(x, SIZE);
+      ctx.quadraticCurveTo(x + (Math.random() - 0.5) * 6, (SIZE + top) / 2, x + (Math.random() - 0.5) * 12, top);
+      ctx.stroke();
+    }
+  });
+}

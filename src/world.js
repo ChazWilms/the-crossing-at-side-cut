@@ -7,9 +7,8 @@ import mapData from './data/map.json';
 // The map JSON is authored in a 1000x600 top-down grid; the world uses
 // half-scale meters with the grid centered at the origin (map y -> world z).
 const S = 0.5;
-const mapToWorld = (mx, my) => new THREE.Vector2((mx - 500) * S, (my - 300) * S);
 
-// Zone bands from the map, converted once to world-space z ranges.
+// Zone bands from the map, converted once to world-space ranges.
 const bands = {};
 for (const zone of mapData.zones) {
   bands[zone.id] = {
@@ -18,27 +17,162 @@ for (const zone of mapData.zones) {
   };
 }
 
-const BANK_Y = 0;
-const RIVERBED_Y = -1.4;
-const WATER_Y = -0.8;
+const WATER_Y = -0.9;
 const STONE_TOP_Y = 0.35;
 
 function lambert(opts) {
   return applyRetroMaterial(new THREE.MeshLambertMaterial(opts));
 }
 
+// --- Seeded value noise, shared by the terrain mesh and collision so the
+// player walks on exactly the surface that is rendered. ---
+function mulberry32(a) {
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+class ValueNoise {
+  constructor(seed) {
+    const rand = mulberry32(seed);
+    const p = [...Array(256).keys()];
+    for (let i = 255; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [p[i], p[j]] = [p[j], p[i]];
+    }
+    this.perm = new Uint8Array(512);
+    for (let i = 0; i < 512; i++) this.perm[i] = p[i & 255];
+  }
+
+  lattice(ix, iz) {
+    return this.perm[(this.perm[ix & 255] + iz) & 255] / 255;
+  }
+
+  noise2(x, z) {
+    const ix = Math.floor(x);
+    const iz = Math.floor(z);
+    const fx = x - ix;
+    const fz = z - iz;
+    const sx = fx * fx * (3 - 2 * fx);
+    const sz = fz * fz * (3 - 2 * fz);
+    const a = this.lattice(ix, iz);
+    const b = this.lattice(ix + 1, iz);
+    const c = this.lattice(ix, iz + 1);
+    const d = this.lattice(ix + 1, iz + 1);
+    return (a + (b - a) * sx + (c - a) * sz + (a - b - c + d) * sx * sz) * 2 - 1;
+  }
+}
+
+const smoothstep = (e0, e1, x) => {
+  const t = THREE.MathUtils.clamp((x - e0) / (e1 - e0), 0, 1);
+  return t * t * (3 - 2 * t);
+};
+
+// Hand-modeled jank: displace vertices by a hash of their position, so
+// shared/seam vertices move identically and meshes never crack.
+function jitterGeometry(geo, amount) {
+  const pos = geo.attributes.position;
+  const h = (x, y, z, s) => {
+    const v = Math.sin(x * 127.1 + y * 311.7 + z * 74.7 + s * 53.3) * 43758.5453;
+    return v - Math.floor(v) - 0.5;
+  };
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    pos.setXYZ(
+      i,
+      x + h(x, y, z, 1) * amount,
+      y + h(x, y, z, 2) * amount,
+      z + h(x, y, z, 3) * amount
+    );
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
 export class World {
   constructor() {
     this.stones = []; // walkable crossing stones: {x, z, r}
-    this.pathPoints = []; // sampled island footpath, for tree avoidance + AI later
-    this.parkPathPoints = []; // sampled north-bank path, parking lot -> crossing
+    this.boulders = []; // solid rocks: {x, z, r, top}
+    this.pathPoints = []; // sampled island footpath
+    this.parkPathPoints = []; // sampled north-bank path
+    this.protectPoints = []; // all path samples; terrain stays land near these
     this.waterMaterials = [];
-    // Spawn in the Riverview Area parking lot.
     this.spawn = new THREE.Vector3(14, 0, -101);
     this.towerPosition = new THREE.Vector3(152, 0, 58);
+    this.hillCenter = new THREE.Vector2(-175, -112); // Wagener Sledding Hill
+
+    this.rolling = new ValueNoise(1137);
+    this.detail = new ValueNoise(4422);
+    this.shore = new ValueNoise(9810);
+  }
+
+  // ---------------------------------------------------------------------
+  // Height field — single source of truth for terrain, props, and physics.
+  // ---------------------------------------------------------------------
+  heightAt(x, z) {
+    // Rolling parkland base.
+    let h =
+      this.rolling.noise2(x * 0.022, z * 0.022) * 1.1 +
+      this.detail.noise2(x * 0.085, z * 0.085) * 0.3;
+    h = Math.max(h, -0.45);
+
+    // Wagener Sledding Hill rises out of the north bank.
+    const hdx = x - this.hillCenter.x;
+    const hdz = z - this.hillCenter.y;
+    h += 6.5 * Math.exp(-(hdx * hdx + hdz * hdz) / (2 * 19 * 19));
+
+    // Carve the two river channels with noisy, wavering shorelines.
+    const wobbleA = this.shore.noise2(x * 0.02, 11.3) * 5;
+    const wobbleB = this.shore.noise2(x * 0.02, 47.7) * 5;
+    const carve = (z0, z1) => {
+      const pen = Math.min(z - (z0 + wobbleA), z1 + wobbleB - z);
+      const s = smoothstep(0, 6, pen);
+      if (s > 0) h = THREE.MathUtils.lerp(h, -1.75 + this.detail.noise2(x * 0.1, z * 0.1) * 0.25, s);
+    };
+    carve(bands.river_north_channel.z[0], bands.river_north_channel.z[1]);
+    carve(bands.river_south_channel.z[0], bands.river_south_channel.z[1]);
+
+    // The island mounds up gently between the channels.
+    const island = bands.blue_grass_island;
+    const ipen = Math.min(
+      z - (bands.river_north_channel.z[1] + wobbleB),
+      bands.river_south_channel.z[0] + wobbleA - z,
+      x - island.x[0],
+      island.x[1] - x
+    );
+    h += smoothstep(0, 20, ipen) * 0.7;
+
+    // Shallows where the crossing stones sit — wadeable, not drownable.
+    if (x > -114 && x < -86 && z > -56 && z < -4) h = Math.max(h, -1.2);
+
+    // Keep a walkable land corridor under the footpaths.
+    if (this.protectPoints.length) {
+      const d = World.distanceToPoints(this.protectPoints, x, z);
+      const f = 1 - smoothstep(2.5, 8, d);
+      if (f > 0) h = THREE.MathUtils.lerp(h, Math.max(h, 0.2), f);
+    }
+
+    // Flatten the built-up Riverview Area so the structures sit naturally.
+    const pdx = Math.max(0, Math.max(-34 - x, x - 38));
+    const pdz = Math.max(0, Math.max(-120 - z, z - -78));
+    const parkF = 1 - smoothstep(0, 10, Math.hypot(pdx, pdz));
+    h = THREE.MathUtils.lerp(h, 0, parkF);
+
+    // Flatten the beach clearing around the tower.
+    const td = Math.hypot(x - this.towerPosition.x, z - this.towerPosition.z);
+    h = THREE.MathUtils.lerp(h, 0.15, 1 - smoothstep(16, 30, td));
+
+    return h;
   }
 
   build(scene) {
+    this.computePathLines();
     this.buildAtmosphere(scene);
     this.buildTerrain(scene);
     this.buildParkArea(scene);
@@ -46,12 +180,34 @@ export class World {
     this.buildPaths(scene);
     this.buildBoulders(scene);
     this.buildForest(scene);
+    this.buildUndergrowth(scene);
     this.buildBeachAndTower(scene);
   }
 
+  // Path centerlines are needed before the terrain builds (land protection),
+  // so they are sampled first and the visible ribbons are draped later.
+  computePathLines() {
+    const sample = (points2d) => {
+      const curve = new THREE.CatmullRomCurve3(
+        points2d.map(([x, z]) => new THREE.Vector3(x, 0, z))
+      );
+      const n = Math.max(60, Math.round(curve.getLength() * 0.8));
+      const out = [];
+      for (let i = 0; i <= n; i++) out.push(curve.getPoint(i / n));
+      return out;
+    };
+
+    this.parkPathLine = [[2, -101], [-20, -92], [-48, -78], [-75, -62], [-92, -52], [-99, -47]];
+    this.islandPathLine = [
+      [-100, -8], [-78, 8], [-42, 26], [-5, 16], [35, 42],
+      [78, 24], [112, 48], [140, 56], [152, 58],
+    ];
+    this.parkPathPoints = sample(this.parkPathLine);
+    this.pathPoints = sample(this.islandPathLine);
+    this.protectPoints = [...this.parkPathPoints, ...this.pathPoints];
+  }
+
   buildAtmosphere(scene) {
-    // Deep sunset: orange light bleeding through purple haze, short draw
-    // distance so the world dissolves before its edges show.
     const horizon = new THREE.Color(0xc46a47);
     scene.background = horizon;
     scene.fog = new THREE.Fog(horizon, 25, 140);
@@ -64,45 +220,64 @@ export class World {
   }
 
   buildTerrain(scene) {
-    const grassMat = lambert({ map: tex.grassTexture(60) });
-    const floorMat = lambert({ map: tex.forestFloorTexture(50) });
-    const waterMat = lambert({ map: tex.waterTexture(80) });
+    // One displaced, flat-shaded heightfield instead of flat planes.
+    const geo = new THREE.PlaneGeometry(560, 330, 200, 120);
+    geo.rotateX(-Math.PI / 2);
+    geo.translate(0, 0, 5);
+
+    const pos = geo.attributes.position;
+    const colors = new Float32Array(pos.count * 3);
+    const island = bands.blue_grass_island;
+    const c = new THREE.Color();
+
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const z = pos.getZ(i);
+      const h = this.heightAt(x, z);
+      pos.setY(i, h);
+
+      // Zone tinting: mud below the waterline, darker forest floor on the
+      // island, warm sand around the tower beach.
+      c.setRGB(1, 1, 1);
+      if (h < -0.7) {
+        c.lerp(new THREE.Color(0.6, 0.55, 0.45), Math.min(1, (-0.7 - h) / 0.9));
+      } else if (z > island.z[0] - 6 && z < island.z[1] + 6 && x > island.x[0] && x < island.x[1]) {
+        c.lerp(new THREE.Color(0.74, 0.78, 0.62), 0.6);
+      }
+      const td = Math.hypot(x - this.towerPosition.x, z - this.towerPosition.z);
+      if (td < 26) c.lerp(new THREE.Color(1.0, 0.93, 0.78), 1 - td / 26);
+
+      colors[i * 3] = c.r;
+      colors[i * 3 + 1] = c.g;
+      colors[i * 3 + 2] = c.b;
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    // De-index for true per-face normals: shader-side flatShading derives
+    // normals from screen derivatives, which degenerate on glancing
+    // triangles at 320x240 and flash black.
+    const flatGeo = geo.toNonIndexed();
+    flatGeo.computeVertexNormals();
+    const fn = flatGeo.attributes.normal;
+    for (let i = 0; i < fn.count; i += 3) {
+      // Average the three corners so each face is uniformly lit.
+      const nx = (fn.getX(i) + fn.getX(i + 1) + fn.getX(i + 2)) / 3;
+      const ny = (fn.getY(i) + fn.getY(i + 1) + fn.getY(i + 2)) / 3;
+      const nz = (fn.getZ(i) + fn.getZ(i + 1) + fn.getZ(i + 2)) / 3;
+      for (let k = 0; k < 3; k++) fn.setXYZ(i + k, nx, ny, nz);
+    }
+
+    scene.add(
+      new THREE.Mesh(
+        flatGeo,
+        lambert({ map: tex.grassTexture(70), vertexColors: true })
+      )
+    );
+
+    // Water sheet over the carved riverbed.
+    const waterMat = lambert({ map: tex.waterTexture(80), color: 0xffff00 });
     this.waterMaterials.push(waterMat);
-
-    // Large surfaces are subdivided so the affine texture warp stays local —
-    // PSX hardware had the same problem and games tessellated for the same reason.
-    const northBank = new THREE.Mesh(new THREE.PlaneGeometry(520, 110, 52, 11), grassMat);
-    northBank.rotation.x = -Math.PI / 2;
-    northBank.position.set(0, BANK_Y, -105);
-    scene.add(northBank);
-
-    // South bank strip, mostly swallowed by fog across the river.
-    const southBank = new THREE.Mesh(new THREE.PlaneGeometry(520, 30, 52, 3), grassMat);
-    southBank.rotation.x = -Math.PI / 2;
-    southBank.position.set(0, BANK_Y, 152);
-    scene.add(southBank);
-
-    // The island: dense forest floor between the two channels.
-    const islandBand = bands.blue_grass_island;
-    const island = new THREE.Mesh(
-      new THREE.PlaneGeometry(
-        islandBand.x[1] - islandBand.x[0],
-        islandBand.z[1] - islandBand.z[0],
-        38, 11
-      ),
-      floorMat
-    );
-    island.rotation.x = -Math.PI / 2;
-    island.position.set(
-      (islandBand.x[0] + islandBand.x[1]) / 2,
-      BANK_Y + 0.05,
-      (islandBand.z[0] + islandBand.z[1]) / 2
-    );
-    scene.add(island);
-
-    // One broad water sheet under everything between the banks; the island
-    // plane sits on top of it.
-    const water = new THREE.Mesh(new THREE.PlaneGeometry(520, 200, 52, 20), waterMat);
+    const water = new THREE.Mesh(new THREE.PlaneGeometry(560, 220, 56, 22), waterMat);
     water.rotation.x = -Math.PI / 2;
     water.position.set(0, WATER_Y, 45);
     scene.add(water);
@@ -111,7 +286,6 @@ export class World {
   // The Riverview Area from the map: parking lot, one lone car, the picnic
   // shelter, and the playground. This is where the player starts.
   buildParkArea(scene) {
-    // Parking lot with painted stalls along its north edge.
     const lot = new THREE.Mesh(
       new THREE.PlaneGeometry(30, 12, 10, 4),
       lambert({ map: tex.parkingLotTexture() })
@@ -120,14 +294,13 @@ export class World {
     lot.position.set(15, 0.1, -106);
     scene.add(lot);
 
-    // Driveway running north into the fog, implying the road out.
-    const driveway = new THREE.Mesh(
-      new THREE.PlaneGeometry(6, 40, 2, 13),
-      lambert({ map: tex.asphaltTexture(10) })
+    // Driveway running north into the fog, draped over the terrain.
+    this.buildRibbon(
+      scene,
+      [[15, -112], [15, -132], [14, -152]],
+      3,
+      lambert({ map: tex.asphaltTexture(8) })
     );
-    driveway.rotation.x = -Math.PI / 2;
-    driveway.position.set(15, 0.09, -132);
-    scene.add(driveway);
 
     this.buildCar(scene, 8, -109.3, 0.06);
     this.buildShelter(scene, 6, -88);
@@ -140,11 +313,11 @@ export class World {
     const glassMat = lambert({ color: 0x2e3a40 });
     const wheelMat = lambert({ color: 0x1d1d1f });
 
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.0, 4.4), bodyMat);
+    const body = new THREE.Mesh(jitterGeometry(new THREE.BoxGeometry(1.9, 1.0, 4.4, 2, 1, 3), 0.08), bodyMat);
     body.position.y = 0.8;
     car.add(body);
 
-    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.75, 2.2), glassMat);
+    const cabin = new THREE.Mesh(jitterGeometry(new THREE.BoxGeometry(1.7, 0.75, 2.2, 2, 1, 2), 0.06), glassMat);
     cabin.position.set(0, 1.65, 0.3);
     car.add(cabin);
 
@@ -164,7 +337,7 @@ export class World {
 
   buildShelter(scene, x, z) {
     const postMat = lambert({ color: 0x6b4f35 });
-    const slab = new THREE.Mesh(new THREE.PlaneGeometry(9, 7), lambert({ map: tex.concreteTexture(4) }));
+    const slab = new THREE.Mesh(new THREE.PlaneGeometry(9, 7, 4, 3), lambert({ map: tex.concreteTexture(4) }));
     slab.rotation.x = -Math.PI / 2;
     slab.position.set(x, 0.08, z);
     scene.add(slab);
@@ -177,7 +350,10 @@ export class World {
       }
     }
 
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(6.4, 2.2, 4), lambert({ color: 0x5e4632 }));
+    const roof = new THREE.Mesh(
+      jitterGeometry(new THREE.ConeGeometry(6.4, 2.2, 4), 0.15),
+      lambert({ color: 0x5e4632, flatShading: true })
+    );
     roof.rotation.y = Math.PI / 4;
     roof.position.set(x, 3.7, z);
     scene.add(roof);
@@ -200,7 +376,10 @@ export class World {
     const platform = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.18, 2.8), accentMat);
     platform.position.set(x, 1.25, z);
     scene.add(platform);
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(2.1, 1.3, 4), accentMat);
+    const roof = new THREE.Mesh(
+      jitterGeometry(new THREE.ConeGeometry(2.1, 1.3, 4), 0.1),
+      lambert({ color: 0x9e4436, flatShading: true })
+    );
     roof.rotation.y = Math.PI / 4;
     roof.position.set(x, 3.2, z);
     scene.add(roof);
@@ -238,7 +417,7 @@ export class World {
 
   buildCrossing(scene) {
     // Large flat river stones spanning the north channel near Western Point.
-    const stoneMat = lambert({ map: tex.riverRockTexture(2) });
+    const stoneMat = lambert({ map: tex.riverRockTexture(2), flatShading: true });
     const startZ = bands.river_north_channel.z[0] + 1.5;
     const endZ = bands.river_north_channel.z[1] - 1.0;
     const count = 9;
@@ -249,41 +428,53 @@ export class World {
       const x = crossingX + Math.sin(i * 2.1) * 2.2;
       const z = THREE.MathUtils.lerp(startZ, endZ, t);
       const r = 1.3 + Math.random() * 0.5;
-      const stone = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.15, 1.7, 7), stoneMat);
-      stone.position.set(x, STONE_TOP_Y - 0.85, z);
+      const stone = new THREE.Mesh(
+        jitterGeometry(new THREE.CylinderGeometry(r, r * 1.2, 2.0, 7), 0.16),
+        stoneMat
+      );
+      stone.position.set(x, STONE_TOP_Y - 1.0, z);
       stone.rotation.y = Math.random() * Math.PI;
       scene.add(stone);
       this.stones.push({ x, z, r });
     }
   }
 
-  // Builds a flat dirt ribbon along a 2D polyline; returns the sampled points
-  // so callers can use them for tree avoidance and, later, chase AI.
+  // Builds a dirt ribbon draped over the terrain along a 2D polyline.
   buildRibbon(scene, points2d, halfWidth, material) {
     const curve = new THREE.CatmullRomCurve3(
       points2d.map(([x, z]) => new THREE.Vector3(x, 0, z))
     );
     const samples = Math.max(60, Math.round(curve.getLength() * 1.2));
-    const sampled = [];
     const positions = [];
     const uvs = [];
     const indices = [];
 
+    // 4 vertex columns across the width — a single quad would smear badly
+    // under the affine texture mapping at close, glancing angles.
+    const cols = 4;
     for (let i = 0; i <= samples; i++) {
       const t = i / samples;
       const p = curve.getPoint(t);
-      sampled.push(p);
       const tangent = curve.getTangent(t);
       const nx = -tangent.z;
       const nz = tangent.x;
-      positions.push(p.x + nx * halfWidth, 0.12, p.z + nz * halfWidth);
-      positions.push(p.x - nx * halfWidth, 0.12, p.z - nz * halfWidth);
       const v = (t * curve.getLength()) / 4;
-      uvs.push(0, v, 1, v);
+      for (let c = 0; c < cols; c++) {
+        const f = (c / (cols - 1)) * 2 - 1;
+        const px = p.x + nx * halfWidth * f;
+        const pz = p.z + nz * halfWidth * f;
+        // 0.35 offset: the terrain mesh interpolates between vertices 2.8m
+        // apart and can bow above the analytic height between them.
+        positions.push(px, this.heightAt(px, pz) + 0.35, pz);
+        uvs.push(c / (cols - 1), v);
+      }
       if (i < samples) {
-        const a = i * 2;
-        // Wound counterclockwise seen from above so the faces point up.
-        indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+        for (let c = 0; c < cols - 1; c++) {
+          const a = i * cols + c;
+          const b = a + cols;
+          // Wound counterclockwise seen from above so the faces point up.
+          indices.push(a, a + 1, b, a + 1, b + 1, b);
+        }
       }
     }
 
@@ -293,42 +484,25 @@ export class World {
     geo.setIndex(indices);
     geo.computeVertexNormals();
     scene.add(new THREE.Mesh(geo, material));
-    return sampled;
   }
 
   buildPaths(scene) {
     const dirtMat = lambert({ map: tex.dirtTexture(1) });
-
-    // Park side: from the parking lot, past the playground, to the crossing.
-    this.parkPathPoints = this.buildRibbon(
-      scene,
-      [[2, -101], [-20, -92], [-48, -78], [-75, -62], [-92, -52], [-99, -47]],
-      1.8,
-      dirtMat
-    );
-
-    // Island side: from the crossing landing, winding east to the beach and tower.
-    this.pathPoints = this.buildRibbon(
-      scene,
-      [
-        [-100, -8], [-78, 8], [-42, 26], [-5, 16], [35, 42],
-        [78, 24], [112, 48], [140, 56], [152, 58],
-      ],
-      2.0,
-      dirtMat
-    );
+    this.buildRibbon(scene, this.parkPathLine, 1.8, dirtMat);
+    this.buildRibbon(scene, this.islandPathLine, 2.0, dirtMat);
   }
 
   // Low-poly rocks: wayfinding markers along both paths plus natural scatter.
   // They are solid — getGroundHeight treats them as plateaus, so small ones
   // can be stepped onto and large ones physically block the player.
   buildBoulders(scene) {
-    this.boulders = []; // {x, z, r, top}
     const geos = [];
 
-    const addBoulder = (x, z, r, baseY) => {
+    const addBoulder = (x, z, r) => {
+      const baseY = this.heightAt(x, z);
       const geo = new THREE.IcosahedronGeometry(r, 0);
       geo.scale(1, 0.65, 1);
+      jitterGeometry(geo, r * 0.25);
       geo.rotateY(Math.random() * Math.PI * 2);
       geo.translate(x, baseY + r * 0.4, z);
       geos.push(geo);
@@ -336,8 +510,8 @@ export class World {
     };
 
     // Markers along the path edges, alternating sides every ~12 meters.
-    const lineTrail = (points, halfWidth, baseY) => {
-      const stride = 14;
+    const lineTrail = (points, halfWidth) => {
+      const stride = 10;
       for (let i = stride; i < points.length - stride; i += stride) {
         const side = (i / stride) % 2 === 0 ? 1 : -1;
         const tangent = points[i + 1].clone().sub(points[i - 1]).normalize();
@@ -345,13 +519,12 @@ export class World {
         addBoulder(
           points[i].x - tangent.z * off * side,
           points[i].z + tangent.x * off * side,
-          0.45 + Math.random() * 0.35,
-          baseY
+          0.45 + Math.random() * 0.35
         );
       }
     };
-    lineTrail(this.parkPathPoints, 1.8, 0);
-    lineTrail(this.pathPoints, 2.0, 0.05);
+    lineTrail(this.parkPathPoints, 1.8);
+    lineTrail(this.pathPoints, 2.0);
 
     // Natural scatter on the north bank, clear of the built-up park area.
     let placed = 0;
@@ -360,7 +533,7 @@ export class World {
       const z = THREE.MathUtils.lerp(-145, -58, Math.random());
       if (x > -32 && x < 36 && z > -118 && z < -80) continue;
       if (World.distanceToPoints(this.parkPathPoints, x, z) < 4) continue;
-      addBoulder(x, z, 0.6 + Math.random() * 1.1, 0);
+      addBoulder(x, z, 0.6 + Math.random() * 1.1);
       placed++;
     }
 
@@ -370,13 +543,19 @@ export class World {
     while (placed < 34) {
       const x = THREE.MathUtils.lerp(island.x[0] + 2, island.x[1] - 2, Math.random());
       const z = THREE.MathUtils.lerp(island.z[0] + 2, island.z[1] - 2, Math.random());
-      if (this.distanceToPath(x, z) < 4) continue;
+      if (World.distanceToPoints(this.pathPoints, x, z) < 4) continue;
       if (this.towerPosition.distanceTo(new THREE.Vector3(x, 0, z)) < 10) continue;
-      addBoulder(x, z, 0.5 + Math.random() * 1.3, 0.05);
+      if (this.heightAt(x, z) < -0.5) continue;
+      addBoulder(x, z, 0.5 + Math.random() * 1.3);
       placed++;
     }
 
-    scene.add(new THREE.Mesh(mergeGeometries(geos), lambert({ map: tex.riverRockTexture(2) })));
+    scene.add(
+      new THREE.Mesh(
+        mergeGeometries(geos),
+        lambert({ map: tex.riverRockTexture(2), flatShading: true })
+      )
+    );
   }
 
   static distanceToPoints(points, x, z) {
@@ -388,29 +567,62 @@ export class World {
     return Math.sqrt(min);
   }
 
-  distanceToPath(x, z) {
-    return World.distanceToPoints(this.pathPoints, x, z);
-  }
-
   buildForest(scene) {
     const trunkGeos = [];
-    const canopyGeos = [];
+    const pineGeos = [];
+    const oakGeos = [];
 
-    const addTree = (x, z) => {
-      const height = 6 + Math.random() * 5;
-      const trunk = new THREE.CylinderGeometry(0.22, 0.35, height, 5);
-      trunk.translate(x, height / 2, z);
+    // Jittered conifer: leaning tapered trunk, 3-4 irregular cone tiers.
+    const addPine = (x, z) => {
+      const y = this.heightAt(x, z);
+      const height = 6.5 + Math.random() * 5;
+      const lean = (Math.random() - 0.5) * 0.5;
+      const trunk = new THREE.CylinderGeometry(0.18 + Math.random() * 0.1, 0.4, height, 5);
+      jitterGeometry(trunk, 0.1);
+      trunk.translate(lean, height / 2 - 0.3, 0);
+      trunk.translate(x, y, z);
       trunkGeos.push(trunk);
-      // Two stacked cones for a chunky low-poly canopy.
-      for (let c = 0; c < 2; c++) {
-        const r = 2.4 - c * 0.9 + Math.random() * 0.6;
-        const cone = new THREE.ConeGeometry(r, 4 - c, 6);
-        cone.translate(x, height * 0.55 + c * 2.4, z);
-        canopyGeos.push(cone);
+
+      const tiers = 3 + Math.floor(Math.random() * 2);
+      for (let c = 0; c < tiers; c++) {
+        const f = c / tiers;
+        const r = (2.6 - f * 1.7) * (0.85 + Math.random() * 0.4);
+        const cone = new THREE.ConeGeometry(r, 3.2 - f, 6);
+        jitterGeometry(cone, r * 0.22);
+        cone.translate(
+          lean * (1 + f) + (Math.random() - 0.5) * 0.5,
+          height * 0.42 + c * 2.1,
+          (Math.random() - 0.5) * 0.5
+        );
+        cone.translate(x, y, z);
+        pineGeos.push(cone);
       }
     };
 
-    // Dense forest on the island, kept clear of the footpath and the tower.
+    // Blobby deciduous tree: short trunk, cluster of squashed icosahedrons.
+    const addOak = (x, z) => {
+      const y = this.heightAt(x, z);
+      const height = 3.5 + Math.random() * 2.5;
+      const trunk = new THREE.CylinderGeometry(0.22, 0.45, height, 5);
+      jitterGeometry(trunk, 0.12);
+      trunk.translate(x, y + height / 2 - 0.3, z);
+      trunkGeos.push(trunk);
+
+      const blobs = 2 + Math.floor(Math.random() * 3);
+      for (let b = 0; b < blobs; b++) {
+        const blob = new THREE.IcosahedronGeometry(1.4 + Math.random() * 1.1, 0);
+        blob.scale(1 + Math.random() * 0.6, 0.7 + Math.random() * 0.4, 1 + Math.random() * 0.6);
+        jitterGeometry(blob, 0.3);
+        blob.translate(
+          x + (Math.random() - 0.5) * 2.4,
+          y + height + (Math.random() - 0.5) * 1.4,
+          z + (Math.random() - 0.5) * 2.4
+        );
+        oakGeos.push(blob);
+      }
+    };
+
+    // Dense mixed forest on the island, kept clear of the footpath and tower.
     const island = bands.blue_grass_island;
     let placed = 0;
     let attempts = 0;
@@ -418,57 +630,163 @@ export class World {
       attempts++;
       const x = THREE.MathUtils.lerp(island.x[0] + 3, island.x[1] - 3, Math.random());
       const z = THREE.MathUtils.lerp(island.z[0] + 3, island.z[1] - 3, Math.random());
-      if (this.distanceToPath(x, z) < 3.2) continue;
+      if (World.distanceToPoints(this.pathPoints, x, z) < 3.2) continue;
       if (this.towerPosition.distanceTo(new THREE.Vector3(x, 0, z)) < 14) continue;
-      addTree(x, z);
+      if (this.heightAt(x, z) < -0.4) continue;
+      Math.random() < 0.65 ? addPine(x, z) : addOak(x, z);
       placed++;
     }
 
-    // Sparse parkland trees on the north bank, clear of the Riverview Area,
-    // the driveway, and the path down to the crossing.
+    // Sparse parkland trees on the north bank — mostly broad oaks.
     let bankPlaced = 0;
     let bankAttempts = 0;
-    while (bankPlaced < 32 && bankAttempts < 1500) {
+    while (bankPlaced < 36 && bankAttempts < 1500) {
       bankAttempts++;
       const x = THREE.MathUtils.lerp(-250, 250, Math.random());
       const z = THREE.MathUtils.lerp(-145, -58, Math.random());
       if (x > -32 && x < 36 && z > -118 && z < -80) continue; // lot/shelter/playground
       if (x > 9 && x < 21 && z < -110) continue; // driveway
       if (World.distanceToPoints(this.parkPathPoints, x, z) < 3.5) continue;
-      addTree(x, z);
+      Math.random() < 0.6 ? addOak(x, z) : addPine(x, z);
       bankPlaced++;
     }
 
     scene.add(new THREE.Mesh(mergeGeometries(trunkGeos), lambert({ map: tex.barkTexture(1) })));
     scene.add(
-      new THREE.Mesh(mergeGeometries(canopyGeos), lambert({ color: 0x2d3b22 }))
+      new THREE.Mesh(mergeGeometries(pineGeos), lambert({ color: 0x2f4226, flatShading: true }))
     );
+    scene.add(
+      new THREE.Mesh(mergeGeometries(oakGeos), lambert({ color: 0x4a5c30, flatShading: true }))
+    );
+  }
+
+  // Ground clutter: grass tufts, shoreline reeds, fallen logs, stumps.
+  buildUndergrowth(scene) {
+    const island = bands.blue_grass_island;
+
+    // Grass tufts: crossed alpha-tested quads, scattered everywhere walkable.
+    const tuftGeos = [];
+    let placed = 0;
+    let attempts = 0;
+    while (placed < 420 && attempts < 3000) {
+      attempts++;
+      const x = THREE.MathUtils.lerp(-250, 250, Math.random());
+      const z = THREE.MathUtils.lerp(-148, 105, Math.random());
+      const h = this.heightAt(x, z);
+      if (h < -0.4) continue; // not in the river
+      if (World.distanceToPoints(this.protectPoints, x, z) < 2.2) continue;
+      if (x > -32 && x < 36 && z > -118 && z < -80) continue;
+      const s = 0.7 + Math.random() * 0.8;
+      for (const rot of [0, Math.PI / 2]) {
+        const quad = new THREE.PlaneGeometry(s, s * 0.6);
+        quad.rotateY(rot + Math.random() * 0.6);
+        quad.translate(x, h + s * 0.27, z);
+        tuftGeos.push(quad);
+      }
+      placed++;
+    }
+    scene.add(
+      new THREE.Mesh(
+        mergeGeometries(tuftGeos),
+        lambert({
+          map: tex.grassBladeTexture(),
+          alphaTest: 0.5,
+          side: THREE.DoubleSide,
+        })
+      )
+    );
+
+    // Reeds where land meets water.
+    const stemGeos = [];
+    const tipGeos = [];
+    placed = 0;
+    attempts = 0;
+    while (placed < 90 && attempts < 2500) {
+      attempts++;
+      const x = THREE.MathUtils.lerp(-250, 250, Math.random());
+      const z = THREE.MathUtils.lerp(-60, 145, Math.random());
+      const h = this.heightAt(x, z);
+      if (h > -0.45 || h < -0.95) continue; // only the waterline band
+      for (let r = 0; r < 3 + Math.floor(Math.random() * 3); r++) {
+        const rx = x + (Math.random() - 0.5) * 1.6;
+        const rz = z + (Math.random() - 0.5) * 1.6;
+        const rh = 1.1 + Math.random() * 0.6;
+        const stem = new THREE.CylinderGeometry(0.025, 0.05, rh, 3);
+        stem.translate(rx, h + rh / 2, rz);
+        stemGeos.push(stem);
+        const tip = new THREE.CylinderGeometry(0.07, 0.07, 0.3, 3);
+        tip.translate(rx, h + rh + 0.1, rz);
+        tipGeos.push(tip);
+      }
+      placed++;
+    }
+    scene.add(new THREE.Mesh(mergeGeometries(stemGeos), lambert({ color: 0x5c6336 })));
+    scene.add(new THREE.Mesh(mergeGeometries(tipGeos), lambert({ color: 0x4a3526 })));
+
+    // Fallen logs and stumps in the island forest.
+    const logMat = lambert({ map: tex.barkTexture(2), flatShading: true });
+    for (let i = 0; i < 7; i++) {
+      const x = THREE.MathUtils.lerp(island.x[0] + 10, island.x[1] - 10, Math.random());
+      const z = THREE.MathUtils.lerp(island.z[0] + 6, island.z[1] - 6, Math.random());
+      if (World.distanceToPoints(this.pathPoints, x, z) < 4) continue;
+      if (this.heightAt(x, z) < -0.3) continue;
+      const len = 4 + Math.random() * 3.5;
+      const log = new THREE.Mesh(
+        jitterGeometry(new THREE.CylinderGeometry(0.32, 0.4, len, 7), 0.1),
+        logMat
+      );
+      log.rotation.z = Math.PI / 2;
+      log.rotation.y = Math.random() * Math.PI;
+      log.position.set(x, this.heightAt(x, z) + 0.28, z);
+      scene.add(log);
+    }
+    for (let i = 0; i < 6; i++) {
+      const p = this.pathPoints[Math.floor(Math.random() * this.pathPoints.length)];
+      const x = p.x + (Math.random() - 0.5) * 8;
+      const z = p.z + (Math.random() - 0.5) * 8;
+      if (World.distanceToPoints(this.pathPoints, x, z) < 2.5) continue;
+      const stump = new THREE.Mesh(
+        jitterGeometry(new THREE.CylinderGeometry(0.35, 0.48, 0.7, 7), 0.08),
+        logMat
+      );
+      stump.position.set(x, this.heightAt(x, z) + 0.3, z);
+      scene.add(stump);
+    }
   }
 
   buildBeachAndTower(scene) {
     // Round river-rock beach where the path meets the eastern shore.
-    const beach = new THREE.Mesh(
-      new THREE.CircleGeometry(20, 14),
-      lambert({ map: tex.riverRockTexture(8) })
-    );
+    // Subdivided disk rather than a triangle fan, to keep affine warp local.
+    const beachGeo = new THREE.PlaneGeometry(42, 42, 10, 10);
+    const bpos = beachGeo.attributes.position;
+    for (let i = 0; i < bpos.count; i++) {
+      const x = bpos.getX(i);
+      const y = bpos.getY(i);
+      const r = Math.hypot(x, y);
+      if (r > 20) {
+        bpos.setX(i, (x / r) * 20);
+        bpos.setY(i, (y / r) * 20);
+      }
+    }
+    const beach = new THREE.Mesh(beachGeo, lambert({ map: tex.riverRockTexture(8) }));
     beach.rotation.x = -Math.PI / 2;
-    beach.position.set(this.towerPosition.x + 6, 0.18, this.towerPosition.z + 2);
+    beach.position.set(this.towerPosition.x + 6, 0.22, this.towerPosition.z + 2);
     scene.add(beach);
 
     // The tower: rings of stacked flat river stones, slightly irregular so
     // the silhouette reads as hand-piled rather than machined.
-    const stoneMat = lambert({ map: tex.stoneTexture(6) });
+    const stoneMat = lambert({ map: tex.stoneTexture(6), flatShading: true });
     const rings = 15;
     const baseRadius = 4.2;
     for (let i = 0; i < rings; i++) {
       const radius = baseRadius * (1 - i * 0.012) + (Math.random() - 0.5) * 0.18;
       const ring = new THREE.Mesh(
-        new THREE.CylinderGeometry(radius, radius, 1.5, 10, 1, true),
+        jitterGeometry(new THREE.CylinderGeometry(radius, radius, 1.5, 10, 1, true), 0.12),
         stoneMat
       );
       ring.position.set(
         this.towerPosition.x + (Math.random() - 0.5) * 0.15,
-        0.6 + i * 1.22,
+        0.75 + i * 1.22,
         this.towerPosition.z + (Math.random() - 0.5) * 0.15
       );
       ring.rotation.y = Math.random() * Math.PI;
@@ -480,7 +798,7 @@ export class World {
       new THREE.PlaneGeometry(1.8, 3),
       new THREE.MeshBasicMaterial({ color: 0x000000 })
     );
-    doorway.position.set(this.towerPosition.x + baseRadius * 0.99, 1.5, this.towerPosition.z + 1.2);
+    doorway.position.set(this.towerPosition.x + baseRadius * 0.99, 1.65, this.towerPosition.z + 1.2);
     doorway.rotation.y = Math.PI / 2;
     scene.add(doorway);
   }
@@ -498,14 +816,7 @@ export class World {
       const dz = z - s.z;
       if (dx * dx + dz * dz < s.r * s.r) return STONE_TOP_Y;
     }
-    const island = bands.blue_grass_island;
-    if (z < bands.river_north_channel.z[0]) return BANK_Y;
-    if (z < bands.river_north_channel.z[1]) return RIVERBED_Y;
-    if (z < bands.river_south_channel.z[0]) {
-      return x >= island.x[0] && x <= island.x[1] ? BANK_Y + 0.05 : RIVERBED_Y;
-    }
-    if (z < bands.river_south_channel.z[1]) return RIVERBED_Y;
-    return BANK_Y;
+    return this.heightAt(x, z);
   }
 
   update(dt) {

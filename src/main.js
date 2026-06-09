@@ -31,6 +31,7 @@ if (debug) {
     ));
   }
   if (params.has('ry')) player.yawObject.rotation.y = parseFloat(params.get('ry'));
+  if (params.has('rx')) player.pitchObject.rotation.x = parseFloat(params.get('rx'));
 }
 overlay.addEventListener('click', () => {
   retro.renderer.domElement.requestPointerLock();
