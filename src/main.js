@@ -65,6 +65,19 @@ document.addEventListener('pointerlockchange', () => {
   overlay.classList.toggle('hidden', !!document.pointerLockElement);
 });
 
+// F toggles fullscreen; entering it can drop pointer lock, so re-grab it.
+document.addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyF') return;
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  } else {
+    const wasLocked = !!document.pointerLockElement;
+    document.body.requestFullscreen().then(() => {
+      if (wasLocked) retro.renderer.domElement.requestPointerLock();
+    }).catch(() => {});
+  }
+});
+
 // --- Area transitions: tower doorway <-> the descent ---
 function teleport(position, facing, toUnderground) {
   teleportCooldown = 2;
