@@ -36,6 +36,6 @@ Pushes to `main` deploy automatically to GitHub Pages.
 - [x] First-person controller with stamina
 - [x] Sunset river, crossing stones, island forest, footpath, beach, tower exterior
 - [x] Footstep audio per surface, wind/river ambience (all synthesized, `src/audio.js`)
-- [ ] Tower interior and the spiral descent
+- [x] The descent: tower doorway to the underground spiral and the chamber
 - [ ] Game manager: exploration -> encounter -> chase, dynamic fog/night transition
 - [ ] The Not-Deer: model, twitch animation, pursuit AI

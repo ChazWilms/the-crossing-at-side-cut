@@ -95,7 +95,7 @@ export class GameAudio {
   setAmbience(windLevel, riverLevel) {
     if (!this.started) return;
     const t = this.ctx.currentTime;
-    this.windGain.gain.setTargetAtTime(0.05 + windLevel * 0.08, t, 0.8);
+    this.windGain.gain.setTargetAtTime(windLevel * 0.13, t, 0.8);
     this.riverGain.gain.setTargetAtTime(riverLevel * 0.3, t, 0.4);
   }
 

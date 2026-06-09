@@ -27,6 +27,11 @@ player.onLand = () => {
   audio.land(world.surfaceAt(p.x, p.z));
 };
 
+// --- Area transition state (used by debug teleports below) ---
+const fade = document.getElementById('fade');
+let underground = false;
+let teleportCooldown = 0;
+
 // --- Pointer lock flow ---
 // ?debug skips the lock so the scene can be inspected/screenshotted headlessly;
 // optional x/z/ry params teleport the camera for spot-checking the world.
@@ -36,10 +41,10 @@ const overlay = document.getElementById('overlay');
 if (debug) {
   overlay.classList.add('hidden');
   if (params.has('x') || params.has('z')) {
-    player.spawnAt(new THREE.Vector3(
-      parseFloat(params.get('x') ?? world.spawn.x), 0,
-      parseFloat(params.get('z') ?? world.spawn.z)
-    ));
+    const dx = parseFloat(params.get('x') ?? world.spawn.x);
+    player.spawnAt(new THREE.Vector3(dx, 0, parseFloat(params.get('z') ?? world.spawn.z)));
+    underground = dx > 400;
+    world.setUnderground(underground);
   }
   if (params.has('ry')) player.yawObject.rotation.y = parseFloat(params.get('ry'));
   if (params.has('rx')) player.pitchObject.rotation.x = parseFloat(params.get('rx'));
@@ -60,16 +65,47 @@ document.addEventListener('pointerlockchange', () => {
   overlay.classList.toggle('hidden', !!document.pointerLockElement);
 });
 
+// --- Area transitions: tower doorway <-> the descent ---
+function teleport(position, facing, toUnderground) {
+  teleportCooldown = 2;
+  fade.style.opacity = 1;
+  setTimeout(() => {
+    underground = toUnderground;
+    world.setUnderground(toUnderground);
+    player.spawnAt(position);
+    player.yawObject.rotation.y = facing;
+    player.pitchObject.rotation.x = 0;
+    player.velocity.set(0, 0, 0);
+    fade.style.opacity = 0;
+  }, 420);
+}
+
+function checkTransitions(p) {
+  if (teleportCooldown > 0) return;
+  if (!underground && p.distanceTo(world.doorPosition) < 1.4) {
+    // Into the dark: arrive on the ledge, facing along it toward the ramp.
+    teleport(world.descentEntry, Math.PI - 0.55, true);
+  } else if (underground && p.distanceTo(world.descentExit) < 1.6) {
+    // Back out through the tunnel mouth to the beach.
+    const out = world.doorPosition.clone();
+    out.x += 2.5;
+    teleport(out, -Math.PI / 2, false);
+  }
+}
+
 // --- Main loop ---
 const clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
+  teleportCooldown = Math.max(0, teleportCooldown - dt);
   if (document.pointerLockElement || debug) {
     player.update(dt);
   }
   world.update(dt);
   const p = player.yawObject.position;
+  const ground = new THREE.Vector3(p.x, 0, p.z);
+  checkTransitions(ground);
   audio.setAmbience(world.windLevel(p.x, p.z), world.riverProximity(p.x, p.z));
   retro.render(scene, camera);
 }

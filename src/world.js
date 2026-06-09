@@ -20,6 +20,25 @@ for (const zone of mapData.zones) {
 const WATER_Y = -0.9;
 const STONE_TOP_Y = 0.35;
 
+// --- The descent: an underground area far east of the playable map (x>400
+// is its address space), reached by teleport from the tower doorway. A
+// conical spiral ramp — each turn at a smaller radius, so the height stays
+// a single-valued function of (x, z) and the heightfield physics still work.
+const DESC = {
+  cx: 500,
+  cz: 0,
+  R0: 14, // ramp radius at the top
+  a: 3.2 / (2 * Math.PI), // radial shrink per radian
+  b: 6.5 / (2 * Math.PI), // drop per radian
+  ledge: 1.0, // flat entry arc (radians) before the ramp starts down
+  maxTheta: 6 * Math.PI, // three full turns
+  rampHalf: 1.7,
+  chamberY: -20.5,
+  chamberR: 14.5,
+};
+const rampRadius = (t) => DESC.R0 - DESC.a * Math.max(0, t - DESC.ledge);
+const rampY = (t) => -DESC.b * Math.max(0, t - DESC.ledge);
+
 function lambert(opts) {
   return applyRetroMaterial(new THREE.MeshLambertMaterial(opts));
 }
@@ -116,6 +135,8 @@ export class World {
   // Height field — single source of truth for terrain, props, and physics.
   // ---------------------------------------------------------------------
   heightAt(x, z) {
+    if (x > 400) return this.descentHeight(x, z);
+
     // Rolling parkland base.
     let h =
       this.rolling.noise2(x * 0.022, z * 0.022) * 1.1 +
@@ -171,6 +192,29 @@ export class World {
     return h;
   }
 
+  descentHeight(x, z) {
+    const dx = x - DESC.cx;
+    const dz = z - DESC.cz;
+    const r = Math.hypot(dx, dz);
+    let th = Math.atan2(dz, dx);
+    if (th < 0) th += Math.PI * 2;
+
+    // The same compass angle occurs once per turn; pick the turn whose
+    // ramp radius is closest to where we actually stand.
+    let best = null;
+    for (let k = 0; k <= 3; k++) {
+      const t = th + k * Math.PI * 2;
+      if (t > DESC.maxTheta + 0.3) continue;
+      const d = r - rampRadius(t);
+      if (!best || Math.abs(d) < Math.abs(best.d)) best = { t, d };
+    }
+
+    if (best && Math.abs(best.d) <= DESC.rampHalf) return rampY(best.t); // on the ramp
+    if (best && best.d > DESC.rampHalf) return rampY(best.t) + 4; // pit wall blocks
+    if (r <= DESC.chamberR) return DESC.chamberY; // inner void: fall to the chamber
+    return 4; // solid rock
+  }
+
   build(scene) {
     this.computePathLines();
     this.buildAtmosphere(scene);
@@ -182,6 +226,7 @@ export class World {
     this.buildForest(scene);
     this.buildUndergrowth(scene);
     this.buildBeachAndTower(scene);
+    this.buildDescent(scene);
   }
 
   // Path centerlines are needed before the terrain builds (land protection),
@@ -208,15 +253,28 @@ export class World {
   }
 
   buildAtmosphere(scene) {
+    this.scene = scene;
     const horizon = new THREE.Color(0xc46a47);
     scene.background = horizon;
     scene.fog = new THREE.Fog(horizon, 25, 140);
 
-    scene.add(new THREE.HemisphereLight(0xffb070, 0x4a3b5c, 1.5));
+    this.hemi = new THREE.HemisphereLight(0xffb070, 0x4a3b5c, 1.5);
+    scene.add(this.hemi);
 
-    const sun = new THREE.DirectionalLight(0xffa050, 2.0);
-    sun.position.set(-80, 30, -30); // low in the west
-    scene.add(sun);
+    this.sun = new THREE.DirectionalLight(0xffa050, 2.0);
+    this.sun.position.set(-80, 30, -30); // low in the west
+    scene.add(this.sun);
+  }
+
+  /** Swap between the sunset overworld and the lightless underground. */
+  setUnderground(under) {
+    this.hemi.intensity = under ? 0.16 : 1.5;
+    this.sun.intensity = under ? 0 : 2.0;
+    const color = under ? 0x030303 : 0xc46a47;
+    this.scene.fog.color.set(color);
+    this.scene.background.set(color);
+    this.scene.fog.near = under ? 3 : 25;
+    this.scene.fog.far = under ? 30 : 140;
   }
 
   buildTerrain(scene) {
@@ -793,18 +851,143 @@ export class World {
       scene.add(ring);
     }
 
-    // Dark doorway facing the beach — the way down comes in a later phase.
+    // Dark doorway facing the beach — walking into it triggers the descent.
     const doorway = new THREE.Mesh(
       new THREE.PlaneGeometry(1.8, 3),
       new THREE.MeshBasicMaterial({ color: 0x000000 })
     );
-    doorway.position.set(this.towerPosition.x + baseRadius * 0.99, 1.65, this.towerPosition.z + 1.2);
+    this.doorPosition = new THREE.Vector3(
+      this.towerPosition.x + baseRadius * 0.99,
+      0,
+      this.towerPosition.z + 1.2
+    );
+    doorway.position.set(this.doorPosition.x, 1.65, this.doorPosition.z);
     doorway.rotation.y = Math.PI / 2;
     scene.add(doorway);
+
+    // Rough stone frame around the opening.
+    const frameMat = lambert({ map: tex.stoneTexture(2), flatShading: true });
+    for (const dz of [-1.1, 1.1]) {
+      const post = new THREE.Mesh(jitterGeometry(new THREE.BoxGeometry(0.5, 3.4, 0.45), 0.08), frameMat);
+      post.position.set(this.doorPosition.x + 0.1, 1.7, this.doorPosition.z + dz);
+      scene.add(post);
+    }
+    const lintel = new THREE.Mesh(jitterGeometry(new THREE.BoxGeometry(0.55, 0.5, 2.7), 0.08), frameMat);
+    lintel.position.set(this.doorPosition.x + 0.1, 3.55, this.doorPosition.z);
+    scene.add(lintel);
+  }
+
+  // The underground: an inverted echo of the tower — stacked stone rings
+  // narrowing as the spiral ramp descends into a black chamber.
+  buildDescent(scene) {
+    const stoneMat = lambert({ map: tex.stoneTexture(6), flatShading: true });
+    const rampMat = lambert({ map: tex.stoneTexture(3), flatShading: true });
+    const rockMat = lambert({ map: tex.riverRockTexture(10) });
+
+    // The spiral ramp, draped onto the descent height function.
+    const rampPts = [];
+    for (let t = 0; t <= DESC.maxTheta; t += 0.25) {
+      rampPts.push([
+        DESC.cx + rampRadius(t) * Math.cos(t),
+        DESC.cz + rampRadius(t) * Math.sin(t),
+      ]);
+    }
+    this.buildRibbon(scene, rampPts, 1.55, rampMat);
+
+    // Pit walls: rings shrinking with depth, mirroring the tower above.
+    for (let y = 2.4; y > DESC.chamberY + 4.5; y -= 1.45) {
+      const t = Math.max(0, -y / DESC.b + DESC.ledge);
+      const radius = Math.max(rampRadius(t) + 2.1, DESC.chamberR * 0.42) + (Math.random() - 0.5) * 0.2;
+      const ring = new THREE.Mesh(
+        jitterGeometry(new THREE.CylinderGeometry(radius, radius, 1.7, 12, 1, true), 0.14),
+        stoneMat
+      );
+      ring.position.set(DESC.cx, y - 0.7, DESC.cz);
+      ring.rotation.y = Math.random() * Math.PI;
+      scene.add(ring);
+    }
+
+    // The chamber: wide cylindrical room under the shaft.
+    for (let y = DESC.chamberY + 0.8; y < DESC.chamberY + 6; y += 1.45) {
+      const ring = new THREE.Mesh(
+        jitterGeometry(new THREE.CylinderGeometry(DESC.chamberR + 0.6, DESC.chamberR + 0.6, 1.7, 14, 1, true), 0.16),
+        stoneMat
+      );
+      ring.position.set(DESC.cx, y, DESC.cz);
+      ring.rotation.y = Math.random() * Math.PI;
+      scene.add(ring);
+    }
+
+    // Chamber floor — subdivided disk, like the beach.
+    const floorGeo = new THREE.PlaneGeometry(34, 34, 9, 9);
+    const fpos = floorGeo.attributes.position;
+    for (let i = 0; i < fpos.count; i++) {
+      const x = fpos.getX(i);
+      const y = fpos.getY(i);
+      const fr = Math.hypot(x, y);
+      if (fr > DESC.chamberR + 1) {
+        fpos.setX(i, (x / fr) * (DESC.chamberR + 1));
+        fpos.setY(i, (y / fr) * (DESC.chamberR + 1));
+      }
+    }
+    const floor = new THREE.Mesh(floorGeo, rockMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(DESC.cx, DESC.chamberY + 0.05, DESC.cz);
+    scene.add(floor);
+
+    // Chamber ceiling annulus (the shaft continues through the middle)
+    // and a cap over the whole pit so no sky is visible from below.
+    const ceiling = new THREE.Mesh(new THREE.RingGeometry(6.5, DESC.chamberR + 1, 14, 2), stoneMat);
+    ceiling.rotation.x = Math.PI / 2;
+    ceiling.position.set(DESC.cx, DESC.chamberY + 5.2, DESC.cz);
+    scene.add(ceiling);
+    const cap = new THREE.Mesh(new THREE.CircleGeometry(19, 12), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+    cap.rotation.x = Math.PI / 2;
+    cap.position.set(DESC.cx, 3.1, DESC.cz);
+    scene.add(cap);
+
+    // The tunnel mouth on the entry ledge — the way back out.
+    const mouth = new THREE.Mesh(new THREE.PlaneGeometry(2, 2.8), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+    const exitT = 0.12;
+    this.descentExit = new THREE.Vector3(
+      DESC.cx + (DESC.R0 + 0.6) * Math.cos(exitT),
+      0,
+      DESC.cz + (DESC.R0 + 0.6) * Math.sin(exitT)
+    );
+    mouth.position.set(this.descentExit.x, 1.4, this.descentExit.z);
+    mouth.rotation.y = Math.atan2(DESC.cx - this.descentExit.x, DESC.cz - this.descentExit.z);
+    scene.add(mouth);
+
+    // Player arrives here, facing along the ledge toward the ramp.
+    const enterT = 0.55;
+    this.descentEntry = new THREE.Vector3(
+      DESC.cx + DESC.R0 * Math.cos(enterT),
+      0,
+      DESC.cz + DESC.R0 * Math.sin(enterT)
+    );
+
+    // Faint warm lights: top of the shaft, mid-shaft, and the chamber.
+    for (const [y, intensity, distance] of [[1.5, 22, 20], [-9, 16, 18], [DESC.chamberY + 3, 38, 30]]) {
+      const light = new THREE.PointLight(0x8a6644, intensity, distance, 1.6);
+      light.position.set(DESC.cx, y, DESC.cz);
+      scene.add(light);
+    }
   }
 
   /** Walkable ground height at (x, z) — the player controller's only physics query. */
   getGroundHeight(x, z) {
+    // Tower wall: solid ring, passable only through the doorway sector.
+    if (x < 400) {
+      const tdx = x - this.towerPosition.x;
+      const tdz = z - this.towerPosition.z;
+      if (tdx * tdx + tdz * tdz < 4.6 * 4.6) {
+        const doorAngle = Math.atan2(1.2, 4.2);
+        let dAng = Math.atan2(tdz, tdx) - doorAngle;
+        dAng = Math.atan2(Math.sin(dAng), Math.cos(dAng));
+        if (Math.abs(dAng) > 0.45) return this.heightAt(x, z) + 4;
+      }
+    }
+
     for (const b of this.boulders) {
       const dx = x - b.x;
       const dz = z - b.z;
@@ -821,6 +1004,7 @@ export class World {
 
   /** What the player is standing on, for footstep audio. */
   surfaceAt(x, z) {
+    if (x > 400) return 'wetstone'; // everything underground is cold stone
     for (const s of this.stones) {
       const dx = x - s.x;
       const dz = z - s.z;
@@ -845,6 +1029,7 @@ export class World {
 
   /** 0..1 — how close the river sounds from here. */
   riverProximity(x, z) {
+    if (x > 400) return 0; // silent underground
     const bandDist = (z0, z1) => Math.max(0, Math.max(z0 - z, z - z1));
     let d = Math.min(
       bandDist(bands.river_north_channel.z[0], bands.river_north_channel.z[1]),
@@ -857,6 +1042,7 @@ export class World {
 
   /** 0..1 — wind is stronger among the island trees. */
   windLevel(x, z) {
+    if (x > 400) return 0; // no wind below the earth
     const island = bands.blue_grass_island;
     return z > island.z[0] && z < island.z[1] && x > island.x[0] && x < island.x[1] ? 1 : 0.45;
   }
