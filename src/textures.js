@@ -41,7 +41,7 @@ export function grassTexture(repeat) {
 }
 
 export function dirtTexture(repeat) {
-  return noiseTexture('#846a44', ['#705839', '#977f54', '#5f4c30', '#a38a5e'], 0.5, repeat);
+  return noiseTexture('#9c7e53', ['#8a6c42', '#b09262', '#7a5e38', '#bfa172'], 0.5, repeat);
 }
 
 export function forestFloorTexture(repeat) {

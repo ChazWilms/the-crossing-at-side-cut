@@ -44,6 +44,7 @@ export class World {
     this.buildParkArea(scene);
     this.buildCrossing(scene);
     this.buildPaths(scene);
+    this.buildBoulders(scene);
     this.buildForest(scene);
     this.buildBeachAndTower(scene);
   }
@@ -53,7 +54,7 @@ export class World {
     // distance so the world dissolves before its edges show.
     const horizon = new THREE.Color(0xc46a47);
     scene.background = horizon;
-    scene.fog = new THREE.Fog(horizon, 14, 90);
+    scene.fog = new THREE.Fog(horizon, 25, 140);
 
     scene.add(new THREE.HemisphereLight(0xffb070, 0x4a3b5c, 1.5));
 
@@ -281,7 +282,8 @@ export class World {
       uvs.push(0, v, 1, v);
       if (i < samples) {
         const a = i * 2;
-        indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+        // Wound counterclockwise seen from above so the faces point up.
+        indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
       }
     }
 
@@ -301,7 +303,7 @@ export class World {
     this.parkPathPoints = this.buildRibbon(
       scene,
       [[2, -101], [-20, -92], [-48, -78], [-75, -62], [-92, -52], [-99, -47]],
-      1.4,
+      1.8,
       dirtMat
     );
 
@@ -312,9 +314,69 @@ export class World {
         [-100, -8], [-78, 8], [-42, 26], [-5, 16], [35, 42],
         [78, 24], [112, 48], [140, 56], [152, 58],
       ],
-      1.6,
+      2.0,
       dirtMat
     );
+  }
+
+  // Low-poly rocks: wayfinding markers along both paths plus natural scatter.
+  // They are solid — getGroundHeight treats them as plateaus, so small ones
+  // can be stepped onto and large ones physically block the player.
+  buildBoulders(scene) {
+    this.boulders = []; // {x, z, r, top}
+    const geos = [];
+
+    const addBoulder = (x, z, r, baseY) => {
+      const geo = new THREE.IcosahedronGeometry(r, 0);
+      geo.scale(1, 0.65, 1);
+      geo.rotateY(Math.random() * Math.PI * 2);
+      geo.translate(x, baseY + r * 0.4, z);
+      geos.push(geo);
+      this.boulders.push({ x, z, r, top: baseY + r * 0.62 });
+    };
+
+    // Markers along the path edges, alternating sides every ~12 meters.
+    const lineTrail = (points, halfWidth, baseY) => {
+      const stride = 14;
+      for (let i = stride; i < points.length - stride; i += stride) {
+        const side = (i / stride) % 2 === 0 ? 1 : -1;
+        const tangent = points[i + 1].clone().sub(points[i - 1]).normalize();
+        const off = halfWidth + 0.9 + Math.random() * 0.5;
+        addBoulder(
+          points[i].x - tangent.z * off * side,
+          points[i].z + tangent.x * off * side,
+          0.45 + Math.random() * 0.35,
+          baseY
+        );
+      }
+    };
+    lineTrail(this.parkPathPoints, 1.8, 0);
+    lineTrail(this.pathPoints, 2.0, 0.05);
+
+    // Natural scatter on the north bank, clear of the built-up park area.
+    let placed = 0;
+    while (placed < 18) {
+      const x = THREE.MathUtils.lerp(-240, 240, Math.random());
+      const z = THREE.MathUtils.lerp(-145, -58, Math.random());
+      if (x > -32 && x < 36 && z > -118 && z < -80) continue;
+      if (World.distanceToPoints(this.parkPathPoints, x, z) < 4) continue;
+      addBoulder(x, z, 0.6 + Math.random() * 1.1, 0);
+      placed++;
+    }
+
+    // Scatter through the island forest and along its shorelines.
+    const island = bands.blue_grass_island;
+    placed = 0;
+    while (placed < 34) {
+      const x = THREE.MathUtils.lerp(island.x[0] + 2, island.x[1] - 2, Math.random());
+      const z = THREE.MathUtils.lerp(island.z[0] + 2, island.z[1] - 2, Math.random());
+      if (this.distanceToPath(x, z) < 4) continue;
+      if (this.towerPosition.distanceTo(new THREE.Vector3(x, 0, z)) < 10) continue;
+      addBoulder(x, z, 0.5 + Math.random() * 1.3, 0.05);
+      placed++;
+    }
+
+    scene.add(new THREE.Mesh(mergeGeometries(geos), lambert({ map: tex.riverRockTexture(2) })));
   }
 
   static distanceToPoints(points, x, z) {
@@ -425,6 +487,12 @@ export class World {
 
   /** Walkable ground height at (x, z) — the player controller's only physics query. */
   getGroundHeight(x, z) {
+    for (const b of this.boulders) {
+      const dx = x - b.x;
+      const dz = z - b.z;
+      const reach = b.r * 0.8;
+      if (dx * dx + dz * dz < reach * reach) return b.top;
+    }
     for (const s of this.stones) {
       const dx = x - s.x;
       const dz = z - s.z;
