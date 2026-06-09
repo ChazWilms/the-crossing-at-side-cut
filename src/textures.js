@@ -37,24 +37,24 @@ function noiseTexture(base, specks, density, repeat) {
 }
 
 export function grassTexture(repeat) {
-  return noiseTexture('#4a5d33', ['#3c4d28', '#5a7040', '#2f3d1f', '#677d49'], 0.5, repeat);
+  return noiseTexture('#5a7040', ['#4a5d33', '#6d8450', '#3f4f2a', '#7e955c'], 0.5, repeat);
 }
 
 export function dirtTexture(repeat) {
-  return noiseTexture('#6b5436', ['#5a462c', '#7d6440', '#4d3c25', '#857049'], 0.5, repeat);
+  return noiseTexture('#846a44', ['#705839', '#977f54', '#5f4c30', '#a38a5e'], 0.5, repeat);
 }
 
 export function forestFloorTexture(repeat) {
-  return noiseTexture('#3d4429', ['#2f361f', '#4d5533', '#56492e', '#262c18'], 0.6, repeat);
+  return noiseTexture('#4d5532', ['#3f4628', '#5d663e', '#665838', '#333a20'], 0.6, repeat);
 }
 
 export function riverRockTexture(repeat) {
   return makeCanvasTexture((ctx) => {
-    ctx.fillStyle = '#5d5a52';
+    ctx.fillStyle = '#76726a';
     ctx.fillRect(0, 0, SIZE, SIZE);
     // Round overlapping pebbles.
     for (let i = 0; i < 90; i++) {
-      const shade = 70 + Math.floor(Math.random() * 60);
+      const shade = 95 + Math.floor(Math.random() * 70);
       ctx.fillStyle = `rgb(${shade}, ${shade - 4}, ${shade - 10})`;
       ctx.beginPath();
       ctx.arc(
@@ -71,11 +71,11 @@ export function riverRockTexture(repeat) {
 
 export function stoneTexture(repeat) {
   return makeCanvasTexture((ctx) => {
-    ctx.fillStyle = '#6e6a60';
+    ctx.fillStyle = '#878276';
     ctx.fillRect(0, 0, SIZE, SIZE);
     // Horizontal strata — reads as stacked flat stones on the tower.
     for (let y = 0; y < SIZE; y += 4 + Math.floor(Math.random() * 3)) {
-      const shade = 80 + Math.floor(Math.random() * 50);
+      const shade = 105 + Math.floor(Math.random() * 60);
       ctx.fillStyle = `rgb(${shade}, ${shade - 5}, ${shade - 12})`;
       ctx.fillRect(0, y, SIZE, 3 + Math.floor(Math.random() * 2));
       ctx.fillStyle = 'rgba(20, 18, 14, 0.6)';
@@ -101,5 +101,30 @@ export function barkTexture(repeat) {
 }
 
 export function waterTexture(repeat) {
-  return noiseTexture('#2b3a42', ['#243239', '#33444d', '#1d2930', '#3b4f59'], 0.35, repeat);
+  return noiseTexture('#39505c', ['#304450', '#44606e', '#283a44', '#50707e'], 0.35, repeat);
+}
+
+export function asphaltTexture(repeat) {
+  return noiseTexture('#45464a', ['#3b3c40', '#515257', '#36373a', '#5c5d63'], 0.5, repeat);
+}
+
+// One-shot texture for the whole lot: asphalt with painted parking stalls
+// along the top edge.
+export function parkingLotTexture() {
+  return makeCanvasTexture((ctx) => {
+    ctx.fillStyle = '#45464a';
+    ctx.fillRect(0, 0, SIZE, SIZE);
+    for (let i = 0; i < SIZE * SIZE * 0.5; i++) {
+      ctx.fillStyle = ['#3b3c40', '#515257', '#36373a', '#5c5d63'][Math.floor(Math.random() * 4)];
+      ctx.fillRect(Math.floor(Math.random() * SIZE), Math.floor(Math.random() * SIZE), 2, 1);
+    }
+    ctx.fillStyle = '#cfcabb';
+    for (let x = 2; x < SIZE; x += 13) {
+      ctx.fillRect(x, 0, 1, 26);
+    }
+  });
+}
+
+export function concreteTexture(repeat) {
+  return noiseTexture('#9a9588', ['#8d8a7e', '#a8a294', '#827d70', '#b3ac9c'], 0.4, repeat);
 }

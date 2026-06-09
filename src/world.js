@@ -31,16 +31,19 @@ export class World {
   constructor() {
     this.stones = []; // walkable crossing stones: {x, z, r}
     this.pathPoints = []; // sampled island footpath, for tree avoidance + AI later
+    this.parkPathPoints = []; // sampled north-bank path, parking lot -> crossing
     this.waterMaterials = [];
-    this.spawn = new THREE.Vector3(-55, 0, -70);
+    // Spawn in the Riverview Area parking lot.
+    this.spawn = new THREE.Vector3(14, 0, -101);
     this.towerPosition = new THREE.Vector3(152, 0, 58);
   }
 
   build(scene) {
     this.buildAtmosphere(scene);
     this.buildTerrain(scene);
+    this.buildParkArea(scene);
     this.buildCrossing(scene);
-    this.buildPath(scene);
+    this.buildPaths(scene);
     this.buildForest(scene);
     this.buildBeachAndTower(scene);
   }
@@ -48,14 +51,14 @@ export class World {
   buildAtmosphere(scene) {
     // Deep sunset: orange light bleeding through purple haze, short draw
     // distance so the world dissolves before its edges show.
-    const horizon = new THREE.Color(0xb35c47);
+    const horizon = new THREE.Color(0xc46a47);
     scene.background = horizon;
-    scene.fog = new THREE.Fog(horizon, 10, 70);
+    scene.fog = new THREE.Fog(horizon, 14, 90);
 
-    scene.add(new THREE.HemisphereLight(0xcc7a4d, 0x3a2d4d, 0.9));
+    scene.add(new THREE.HemisphereLight(0xffb070, 0x4a3b5c, 1.5));
 
-    const sun = new THREE.DirectionalLight(0xff7733, 1.4);
-    sun.position.set(-80, 18, -30); // low in the west
+    const sun = new THREE.DirectionalLight(0xffa050, 2.0);
+    sun.position.set(-80, 30, -30); // low in the west
     scene.add(sun);
   }
 
@@ -65,14 +68,15 @@ export class World {
     const waterMat = lambert({ map: tex.waterTexture(80) });
     this.waterMaterials.push(waterMat);
 
-    // North bank parkland.
-    const northBank = new THREE.Mesh(new THREE.PlaneGeometry(520, 110), grassMat);
+    // Large surfaces are subdivided so the affine texture warp stays local —
+    // PSX hardware had the same problem and games tessellated for the same reason.
+    const northBank = new THREE.Mesh(new THREE.PlaneGeometry(520, 110, 52, 11), grassMat);
     northBank.rotation.x = -Math.PI / 2;
     northBank.position.set(0, BANK_Y, -105);
     scene.add(northBank);
 
     // South bank strip, mostly swallowed by fog across the river.
-    const southBank = new THREE.Mesh(new THREE.PlaneGeometry(520, 30), grassMat);
+    const southBank = new THREE.Mesh(new THREE.PlaneGeometry(520, 30, 52, 3), grassMat);
     southBank.rotation.x = -Math.PI / 2;
     southBank.position.set(0, BANK_Y, 152);
     scene.add(southBank);
@@ -80,7 +84,11 @@ export class World {
     // The island: dense forest floor between the two channels.
     const islandBand = bands.blue_grass_island;
     const island = new THREE.Mesh(
-      new THREE.PlaneGeometry(islandBand.x[1] - islandBand.x[0], islandBand.z[1] - islandBand.z[0]),
+      new THREE.PlaneGeometry(
+        islandBand.x[1] - islandBand.x[0],
+        islandBand.z[1] - islandBand.z[0],
+        38, 11
+      ),
       floorMat
     );
     island.rotation.x = -Math.PI / 2;
@@ -93,10 +101,138 @@ export class World {
 
     // One broad water sheet under everything between the banks; the island
     // plane sits on top of it.
-    const water = new THREE.Mesh(new THREE.PlaneGeometry(520, 200), waterMat);
+    const water = new THREE.Mesh(new THREE.PlaneGeometry(520, 200, 52, 20), waterMat);
     water.rotation.x = -Math.PI / 2;
     water.position.set(0, WATER_Y, 45);
     scene.add(water);
+  }
+
+  // The Riverview Area from the map: parking lot, one lone car, the picnic
+  // shelter, and the playground. This is where the player starts.
+  buildParkArea(scene) {
+    // Parking lot with painted stalls along its north edge.
+    const lot = new THREE.Mesh(
+      new THREE.PlaneGeometry(30, 12, 10, 4),
+      lambert({ map: tex.parkingLotTexture() })
+    );
+    lot.rotation.x = -Math.PI / 2;
+    lot.position.set(15, 0.1, -106);
+    scene.add(lot);
+
+    // Driveway running north into the fog, implying the road out.
+    const driveway = new THREE.Mesh(
+      new THREE.PlaneGeometry(6, 40, 2, 13),
+      lambert({ map: tex.asphaltTexture(10) })
+    );
+    driveway.rotation.x = -Math.PI / 2;
+    driveway.position.set(15, 0.09, -132);
+    scene.add(driveway);
+
+    this.buildCar(scene, 8, -109.3, 0.06);
+    this.buildShelter(scene, 6, -88);
+    this.buildPlayground(scene, -16, -94);
+  }
+
+  buildCar(scene, x, z, rotY) {
+    const car = new THREE.Group();
+    const bodyMat = lambert({ color: 0xb0a487 }); // dusty beige sedan
+    const glassMat = lambert({ color: 0x2e3a40 });
+    const wheelMat = lambert({ color: 0x1d1d1f });
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.0, 4.4), bodyMat);
+    body.position.y = 0.8;
+    car.add(body);
+
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.75, 2.2), glassMat);
+    cabin.position.set(0, 1.65, 0.3);
+    car.add(cabin);
+
+    for (const sx of [-0.85, 0.85]) {
+      for (const sz of [-1.45, 1.45]) {
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.25, 8), wheelMat);
+        wheel.rotation.z = Math.PI / 2;
+        wheel.position.set(sx, 0.38, sz);
+        car.add(wheel);
+      }
+    }
+
+    car.position.set(x, 0.02, z);
+    car.rotation.y = rotY;
+    scene.add(car);
+  }
+
+  buildShelter(scene, x, z) {
+    const postMat = lambert({ color: 0x6b4f35 });
+    const slab = new THREE.Mesh(new THREE.PlaneGeometry(9, 7), lambert({ map: tex.concreteTexture(4) }));
+    slab.rotation.x = -Math.PI / 2;
+    slab.position.set(x, 0.08, z);
+    scene.add(slab);
+
+    for (const px of [-3.8, 3.8]) {
+      for (const pz of [-2.8, 0, 2.8]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, 2.7, 0.22), postMat);
+        post.position.set(x + px, 1.35, z + pz);
+        scene.add(post);
+      }
+    }
+
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(6.4, 2.2, 4), lambert({ color: 0x5e4632 }));
+    roof.rotation.y = Math.PI / 4;
+    roof.position.set(x, 3.7, z);
+    scene.add(roof);
+  }
+
+  buildPlayground(scene, x, z) {
+    const frameMat = lambert({ color: 0x4a6a8a }); // faded municipal blue
+    const accentMat = lambert({ color: 0x9e4436 }); // sun-bleached red
+    const slideMat = lambert({ color: 0xc9a832 });
+    const darkMat = lambert({ color: 0x26262a }); // rubber seats, chains
+
+    // Platform tower with a pyramid roof.
+    for (const px of [-1.1, 1.1]) {
+      for (const pz of [-1.1, 1.1]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.6, 0.18), frameMat);
+        post.position.set(x + px, 1.3, z + pz);
+        scene.add(post);
+      }
+    }
+    const platform = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.18, 2.8), accentMat);
+    platform.position.set(x, 1.25, z);
+    scene.add(platform);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(2.1, 1.3, 4), accentMat);
+    roof.rotation.y = Math.PI / 4;
+    roof.position.set(x, 3.2, z);
+    scene.add(roof);
+
+    // Slide running off the south side of the platform.
+    const slide = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.12, 3.4), slideMat);
+    slide.position.set(x, 0.68, z + 2.5);
+    slide.rotation.x = 0.42;
+    scene.add(slide);
+
+    // Swing set: A-frame legs, top bar, two swings.
+    const sx = x - 5.5;
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.15, 0.15), frameMat);
+    bar.position.set(sx, 2.3, z);
+    scene.add(bar);
+    for (const ex of [-1.7, 1.7]) {
+      for (const tilt of [-0.35, 0.35]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.5, 0.12), frameMat);
+        leg.rotation.x = tilt;
+        leg.position.set(sx + ex, 1.15, z + Math.sin(tilt) * 1.1);
+        scene.add(leg);
+      }
+    }
+    for (const swx of [-0.7, 0.7]) {
+      for (const chx of [-0.22, 0.22]) {
+        const chain = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.3, 0.04), darkMat);
+        chain.position.set(sx + swx + chx, 1.6, z);
+        scene.add(chain);
+      }
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.08, 0.25), darkMat);
+      seat.position.set(sx + swx, 0.92, z);
+      scene.add(seat);
+    }
   }
 
   buildCrossing(scene) {
@@ -120,31 +256,29 @@ export class World {
     }
   }
 
-  buildPath(scene) {
-    // Narrow dirt footpath winding from the crossing landing to the east beach.
+  // Builds a flat dirt ribbon along a 2D polyline; returns the sampled points
+  // so callers can use them for tree avoidance and, later, chase AI.
+  buildRibbon(scene, points2d, halfWidth, material) {
     const curve = new THREE.CatmullRomCurve3(
-      [
-        [-100, -8], [-78, 8], [-42, 26], [-5, 16], [35, 42],
-        [78, 24], [112, 48], [140, 56], [152, 58],
-      ].map(([x, z]) => new THREE.Vector3(x, 0, z))
+      points2d.map(([x, z]) => new THREE.Vector3(x, 0, z))
     );
-
-    const samples = 240;
+    const samples = Math.max(60, Math.round(curve.getLength() * 1.2));
+    const sampled = [];
     const positions = [];
     const uvs = [];
     const indices = [];
-    const halfWidth = 1.6;
 
     for (let i = 0; i <= samples; i++) {
       const t = i / samples;
       const p = curve.getPoint(t);
-      this.pathPoints.push(p);
+      sampled.push(p);
       const tangent = curve.getTangent(t);
       const nx = -tangent.z;
       const nz = tangent.x;
       positions.push(p.x + nx * halfWidth, 0.12, p.z + nz * halfWidth);
       positions.push(p.x - nx * halfWidth, 0.12, p.z - nz * halfWidth);
-      uvs.push(0, t * 60, 1, t * 60);
+      const v = (t * curve.getLength()) / 4;
+      uvs.push(0, v, 1, v);
       if (i < samples) {
         const a = i * 2;
         indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
@@ -156,16 +290,44 @@ export class World {
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geo.setIndex(indices);
     geo.computeVertexNormals();
-    scene.add(new THREE.Mesh(geo, lambert({ map: tex.dirtTexture(1) })));
+    scene.add(new THREE.Mesh(geo, material));
+    return sampled;
   }
 
-  distanceToPath(x, z) {
+  buildPaths(scene) {
+    const dirtMat = lambert({ map: tex.dirtTexture(1) });
+
+    // Park side: from the parking lot, past the playground, to the crossing.
+    this.parkPathPoints = this.buildRibbon(
+      scene,
+      [[2, -101], [-20, -92], [-48, -78], [-75, -62], [-92, -52], [-99, -47]],
+      1.4,
+      dirtMat
+    );
+
+    // Island side: from the crossing landing, winding east to the beach and tower.
+    this.pathPoints = this.buildRibbon(
+      scene,
+      [
+        [-100, -8], [-78, 8], [-42, 26], [-5, 16], [35, 42],
+        [78, 24], [112, 48], [140, 56], [152, 58],
+      ],
+      1.6,
+      dirtMat
+    );
+  }
+
+  static distanceToPoints(points, x, z) {
     let min = Infinity;
-    for (const p of this.pathPoints) {
+    for (const p of points) {
       const d = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z);
       if (d < min) min = d;
     }
     return Math.sqrt(min);
+  }
+
+  distanceToPath(x, z) {
+    return World.distanceToPoints(this.pathPoints, x, z);
   }
 
   buildForest(scene) {
@@ -200,12 +362,19 @@ export class World {
       placed++;
     }
 
-    // Sparse parkland trees on the north bank.
-    for (let i = 0; i < 28; i++) {
-      addTree(
-        THREE.MathUtils.lerp(-250, 250, Math.random()),
-        THREE.MathUtils.lerp(-145, -58, Math.random())
-      );
+    // Sparse parkland trees on the north bank, clear of the Riverview Area,
+    // the driveway, and the path down to the crossing.
+    let bankPlaced = 0;
+    let bankAttempts = 0;
+    while (bankPlaced < 32 && bankAttempts < 1500) {
+      bankAttempts++;
+      const x = THREE.MathUtils.lerp(-250, 250, Math.random());
+      const z = THREE.MathUtils.lerp(-145, -58, Math.random());
+      if (x > -32 && x < 36 && z > -118 && z < -80) continue; // lot/shelter/playground
+      if (x > 9 && x < 21 && z < -110) continue; // driveway
+      if (World.distanceToPoints(this.parkPathPoints, x, z) < 3.5) continue;
+      addTree(x, z);
+      bankPlaced++;
     }
 
     scene.add(new THREE.Mesh(mergeGeometries(trunkGeos), lambert({ map: tex.barkTexture(1) })));
