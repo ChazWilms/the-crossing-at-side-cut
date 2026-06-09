@@ -819,6 +819,48 @@ export class World {
     return this.heightAt(x, z);
   }
 
+  /** What the player is standing on, for footstep audio. */
+  surfaceAt(x, z) {
+    for (const s of this.stones) {
+      const dx = x - s.x;
+      const dz = z - s.z;
+      if (dx * dx + dz * dz < s.r * s.r) return 'wetstone';
+    }
+    for (const b of this.boulders) {
+      const dx = x - b.x;
+      const dz = z - b.z;
+      const reach = b.r * 0.8;
+      if (dx * dx + dz * dz < reach * reach) return 'wetstone';
+    }
+    if (this.heightAt(x, z) < -0.45) return 'water';
+    if (x > 0 && x < 30 && z > -112 && z < -100) return 'asphalt'; // parking lot
+    if (x > 12 && x < 18 && z < -112 && z > -152) return 'asphalt'; // driveway
+    if (x > 1.5 && x < 10.5 && z > -91.5 && z < -84.5) return 'asphalt'; // shelter slab
+    if (Math.hypot(x - (this.towerPosition.x + 6), z - (this.towerPosition.z + 2)) < 20) {
+      return 'riverrock'; // tower beach
+    }
+    if (World.distanceToPoints(this.protectPoints, x, z) < 2) return 'dirt';
+    return 'grass';
+  }
+
+  /** 0..1 — how close the river sounds from here. */
+  riverProximity(x, z) {
+    const bandDist = (z0, z1) => Math.max(0, Math.max(z0 - z, z - z1));
+    let d = Math.min(
+      bandDist(bands.river_north_channel.z[0], bands.river_north_channel.z[1]),
+      bandDist(bands.river_south_channel.z[0], bands.river_south_channel.z[1])
+    );
+    // Standing in the water itself.
+    if (this.heightAt(x, z) < -0.45) d = 0;
+    return THREE.MathUtils.clamp(1 - d / 45, 0, 1);
+  }
+
+  /** 0..1 — wind is stronger among the island trees. */
+  windLevel(x, z) {
+    const island = bands.blue_grass_island;
+    return z > island.z[0] && z < island.z[1] && x > island.x[0] && x < island.x[1] ? 1 : 0.45;
+  }
+
   update(dt) {
     // Slow texture scroll sells the river current.
     for (const mat of this.waterMaterials) {

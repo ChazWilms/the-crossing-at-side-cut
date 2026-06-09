@@ -35,7 +35,7 @@ Pushes to `main` deploy automatically to GitHub Pages.
 - [x] PSX-style renderer (low-res, vertex jitter, affine textures)
 - [x] First-person controller with stamina
 - [x] Sunset river, crossing stones, island forest, footpath, beach, tower exterior
-- [ ] Footstep audio per surface, wind ambience
+- [x] Footstep audio per surface, wind/river ambience (all synthesized, `src/audio.js`)
 - [ ] Tower interior and the spiral descent
 - [ ] Game manager: exploration -> encounter -> chase, dynamic fog/night transition
 - [ ] The Not-Deer: model, twitch animation, pursuit AI

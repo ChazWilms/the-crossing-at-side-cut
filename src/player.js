@@ -28,6 +28,11 @@ export class Player {
     this.regenTimer = 0;
     this.keys = new Set();
 
+    // Audio hooks, wired up by main: onStep(sprinting), onLand().
+    this.onStep = null;
+    this.onLand = null;
+    this.stepAccum = 0;
+
     this.staminaFill = document.getElementById('stamina-fill');
 
     document.addEventListener('keydown', (e) => this.keys.add(e.code));
@@ -84,6 +89,14 @@ export class Player {
     if (nextGround - footY <= MAX_STEP) {
       pos.x += step.x;
       pos.z += step.z;
+      // Footsteps fire on distance traveled, so cadence tracks speed.
+      if (this.grounded && moving) {
+        this.stepAccum += Math.hypot(step.x, step.z);
+        if (this.stepAccum >= (sprinting ? 2.6 : 2.0)) {
+          this.stepAccum = 0;
+          this.onStep?.(sprinting);
+        }
+      }
     }
 
     // --- Gravity, jumping, ground snap ---
@@ -97,6 +110,7 @@ export class Player {
     const ground = this.getGroundHeight(pos.x, pos.z);
     if (pos.y - EYE_HEIGHT <= ground) {
       pos.y = ground + EYE_HEIGHT;
+      if (!this.grounded && this.velocity.y < -5) this.onLand?.();
       this.velocity.y = 0;
       this.grounded = true;
     } else {
