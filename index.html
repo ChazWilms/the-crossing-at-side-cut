@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Crossing at Side Cut</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: "Courier New", monospace;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    #overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.85);
+      color: #c9b48a;
+      text-align: center;
+      cursor: pointer;
+      user-select: none;
+      z-index: 10;
+    }
+    #overlay h1 {
+      font-size: 28px;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    #overlay p { font-size: 14px; opacity: 0.7; }
+    #overlay.hidden { display: none; }
+    #hud {
+      position: absolute;
+      left: 16px;
+      bottom: 16px;
+      z-index: 5;
+      pointer-events: none;
+    }
+    #stamina {
+      width: 140px;
+      height: 8px;
+      border: 1px solid rgba(201, 180, 138, 0.5);
+      background: rgba(0, 0, 0, 0.4);
+    }
+    #stamina-fill {
+      width: 100%;
+      height: 100%;
+      background: #c9b48a;
+      transform-origin: left;
+    }
+  </style>
+</head>
+<body>
+  <div id="overlay">
+    <h1>The Crossing at Side Cut</h1>
+    <p>Click to begin &mdash; WASD to move, SHIFT to sprint, SPACE to jump</p>
+  </div>
+  <div id="hud">
+    <div id="stamina"><div id="stamina-fill"></div></div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,148 @@
+{
+  "mapMetadata": {
+    "name": "Blue Grass Island Region",
+    "inspiration": "Maumee River, Ohio",
+    "suggestedDimensions": {
+      "width": 1000,
+      "height": 600
+    },
+    "theme": "River biome, dense forest, parkland"
+  },
+  "zones": [
+    {
+      "id": "north_bank",
+      "type": "parkland",
+      "boundaries": {
+        "x": [
+          0,
+          1000
+        ],
+        "y": [
+          0,
+          200
+        ]
+      },
+      "features": [
+        {
+          "name": "W River Rd",
+          "type": "road",
+          "path": [
+            [
+              0,
+              150
+            ],
+            [
+              250,
+              50
+            ],
+            [
+              1000,
+              0
+            ]
+          ]
+        },
+        {
+          "name": "Wagener Sledding Hill",
+          "type": "elevation",
+          "location": {
+            "x": 150,
+            "y": 80
+          }
+        },
+        {
+          "name": "Riverview Area",
+          "type": "structure",
+          "location": {
+            "x": 500,
+            "y": 100
+          },
+          "subfeatures": [
+            "Shelter",
+            "Playground"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "river_north_channel",
+      "type": "water",
+      "flowDirection": "east",
+      "boundaries": {
+        "x": [
+          0,
+          1000
+        ],
+        "y": [
+          200,
+          280
+        ]
+      }
+    },
+    {
+      "id": "blue_grass_island",
+      "type": "dense_forest",
+      "boundaries": {
+        "x": [
+          100,
+          850
+        ],
+        "y": [
+          280,
+          500
+        ]
+      },
+      "features": [
+        {
+          "name": "Western Point",
+          "type": "shallows",
+          "location": {
+            "x": 120,
+            "y": 350
+          }
+        },
+        {
+          "name": "Eastern Sandbars",
+          "type": "sand",
+          "location": {
+            "x": 800,
+            "y": 400
+          }
+        },
+        {
+          "name": "Island Trails",
+          "type": "dirt_path",
+          "notes": "Faint trails cutting through the center"
+        }
+      ]
+    },
+    {
+      "id": "river_south_channel",
+      "type": "water",
+      "flowDirection": "east",
+      "boundaries": {
+        "x": [
+          0,
+          1000
+        ],
+        "y": [
+          500,
+          580
+        ]
+      }
+    },
+    {
+      "id": "south_bank",
+      "type": "mixed_terrain",
+      "boundaries": {
+        "x": [
+          0,
+          1000
+        ],
+        "y": [
+          580,
+          600
+        ]
+      }
+    }
+  ]
+}

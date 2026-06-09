@@ -1,0 +1,89 @@
+import * as THREE from 'three';
+
+// Internal render resolution — the whole game renders to this tiny target,
+// then gets upscaled with nearest-neighbor filtering. PSX games ran 320x240.
+export const RENDER_WIDTH = 320;
+export const RENDER_HEIGHT = 240;
+
+// Vertex positions snap to a grid at half the render resolution, which is
+// what produces the characteristic PSX polygon jitter as things move.
+const SNAP = new THREE.Vector2(RENDER_WIDTH / 2, RENDER_HEIGHT / 2);
+
+/**
+ * Patches a built-in Three.js material with the two PSX-era quirks:
+ *  - vertex snapping (low-precision transform wobble)
+ *  - affine texture mapping (textures warp because there's no perspective
+ *    correction; we emulate it by un-correcting the UVs ourselves)
+ */
+export function applyRetroMaterial(material) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uSnap = { value: SNAP };
+
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        'uniform vec2 uSnap;\nvarying float vAffineW;\n#include <common>'
+      )
+      .replace(
+        '#include <project_vertex>',
+        `#include <project_vertex>
+        gl_Position.xyz /= gl_Position.w;
+        gl_Position.xy = floor(gl_Position.xy * uSnap) / uSnap;
+        gl_Position.xyz *= gl_Position.w;
+        vAffineW = gl_Position.w;
+        #ifdef USE_MAP
+          vMapUv *= gl_Position.w;
+        #endif`
+      );
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        'varying float vAffineW;\n#include <common>'
+      )
+      .replace(
+        'vec4 sampledDiffuseColor = texture2D( map, vMapUv );',
+        'vec4 sampledDiffuseColor = texture2D( map, vMapUv / vAffineW );'
+      );
+  };
+  return material;
+}
+
+/**
+ * Wraps a WebGLRenderer so the scene draws into a low-res target that is
+ * blitted to the screen as one big pixelated quad.
+ */
+export class RetroRenderer {
+  constructor(canvasParent = document.body) {
+    this.renderer = new THREE.WebGLRenderer({ antialias: false });
+    this.renderer.setPixelRatio(1);
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    canvasParent.appendChild(this.renderer.domElement);
+
+    this.target = new THREE.WebGLRenderTarget(RENDER_WIDTH, RENDER_HEIGHT, {
+      minFilter: THREE.NearestFilter,
+      magFilter: THREE.NearestFilter,
+      depthBuffer: true,
+    });
+
+    this.blitScene = new THREE.Scene();
+    this.blitCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    this.blitScene.add(
+      new THREE.Mesh(
+        new THREE.PlaneGeometry(2, 2),
+        new THREE.MeshBasicMaterial({ map: this.target.texture })
+      )
+    );
+
+    window.addEventListener('resize', () => {
+      this.renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  }
+
+  render(scene, camera) {
+    this.renderer.setRenderTarget(this.target);
+    this.renderer.render(scene, camera);
+    this.renderer.setRenderTarget(null);
+    this.renderer.render(this.blitScene, this.blitCamera);
+  }
+}
