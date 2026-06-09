@@ -21,23 +21,23 @@ const WATER_Y = -0.9;
 const STONE_TOP_Y = 0.35;
 
 // --- The descent: an underground area far east of the playable map (x>400
-// is its address space), reached by teleport from the tower doorway. A
-// conical spiral ramp — each turn at a smaller radius, so the height stays
-// a single-valued function of (x, z) and the heightfield physics still work.
+// is its address space), reached by teleport from the tower doorway. One
+// sweeping ramp hugs the wall of a wide shaft for most of a single turn —
+// under a full revolution, so every (x, z) maps to exactly one height and
+// the heightfield physics still work. The open center drops to the chamber
+// floor, which the ramp also reaches, so falling in never strands you.
 const DESC = {
   cx: 500,
   cz: 0,
-  R0: 14, // ramp radius at the top
-  a: 3.2 / (2 * Math.PI), // radial shrink per radian
-  b: 6.5 / (2 * Math.PI), // drop per radian
+  R0: 14, // ramp centerline radius
   ledge: 1.0, // flat entry arc (radians) before the ramp starts down
-  maxTheta: 6 * Math.PI, // three full turns
+  maxTheta: 5.88, // just under a full turn; the gap is solid wall
   rampHalf: 1.7,
-  chamberY: -20.5,
-  chamberR: 14.5,
+  chamberY: -16,
 };
-const rampRadius = (t) => DESC.R0 - DESC.a * Math.max(0, t - DESC.ledge);
-const rampY = (t) => -DESC.b * Math.max(0, t - DESC.ledge);
+DESC.drop = -DESC.chamberY / (DESC.maxTheta - DESC.ledge); // meters per radian
+const rampY = (t) =>
+  Math.max(-DESC.drop * Math.max(0, t - DESC.ledge), DESC.chamberY);
 
 function lambert(opts) {
   return applyRetroMaterial(new THREE.MeshLambertMaterial(opts));
@@ -199,20 +199,13 @@ export class World {
     let th = Math.atan2(dz, dx);
     if (th < 0) th += Math.PI * 2;
 
-    // The same compass angle occurs once per turn; pick the turn whose
-    // ramp radius is closest to where we actually stand.
-    let best = null;
-    for (let k = 0; k <= 3; k++) {
-      const t = th + k * Math.PI * 2;
-      if (t > DESC.maxTheta + 0.3) continue;
-      const d = r - rampRadius(t);
-      if (!best || Math.abs(d) < Math.abs(best.d)) best = { t, d };
+    if (Math.abs(r - DESC.R0) <= DESC.rampHalf) {
+      // In the ramp's radial band: ramp if the turn reaches this angle,
+      // otherwise the solid wall segment between ramp end and ledge.
+      return th <= DESC.maxTheta ? rampY(th) : 4;
     }
-
-    if (best && Math.abs(best.d) <= DESC.rampHalf) return rampY(best.t); // on the ramp
-    if (best && best.d > DESC.rampHalf) return rampY(best.t) + 4; // pit wall blocks
-    if (r <= DESC.chamberR) return DESC.chamberY; // inner void: fall to the chamber
-    return 4; // solid rock
+    if (r < DESC.R0 - DESC.rampHalf) return DESC.chamberY; // the open center
+    return 4; // solid rock beyond the shaft wall
   }
 
   build(scene) {
@@ -268,7 +261,7 @@ export class World {
 
   /** Swap between the sunset overworld and the lightless underground. */
   setUnderground(under) {
-    this.hemi.intensity = under ? 0.16 : 1.5;
+    this.hemi.intensity = under ? 0.26 : 1.5;
     this.sun.intensity = under ? 0 : 2.0;
     const color = under ? 0x030303 : 0xc46a47;
     this.scene.fog.color.set(color);
@@ -877,57 +870,47 @@ export class World {
     scene.add(lintel);
   }
 
-  // The underground: an inverted echo of the tower — stacked stone rings
-  // narrowing as the spiral ramp descends into a black chamber.
+  // The underground: an inverted echo of the tower — a wide stone shaft
+  // with the ramp sweeping down its wall to an open black floor.
   buildDescent(scene) {
-    const stoneMat = lambert({ map: tex.stoneTexture(6), flatShading: true });
+    // Walls are seen from inside, so they need DoubleSide.
+    const wallMat = lambert({ map: tex.stoneTexture(6), flatShading: true, side: THREE.DoubleSide });
     const rampMat = lambert({ map: tex.stoneTexture(3), flatShading: true });
     const rockMat = lambert({ map: tex.riverRockTexture(10) });
 
-    // The spiral ramp, draped onto the descent height function.
+    // The ramp, draped onto the descent height function.
     const rampPts = [];
-    for (let t = 0; t <= DESC.maxTheta; t += 0.25) {
+    for (let t = 0; t <= DESC.maxTheta; t += 0.15) {
       rampPts.push([
-        DESC.cx + rampRadius(t) * Math.cos(t),
-        DESC.cz + rampRadius(t) * Math.sin(t),
+        DESC.cx + DESC.R0 * Math.cos(t),
+        DESC.cz + DESC.R0 * Math.sin(t),
       ]);
     }
     this.buildRibbon(scene, rampPts, 1.55, rampMat);
 
-    // Pit walls: rings shrinking with depth, mirroring the tower above.
-    for (let y = 2.4; y > DESC.chamberY + 4.5; y -= 1.45) {
-      const t = Math.max(0, -y / DESC.b + DESC.ledge);
-      const radius = Math.max(rampRadius(t) + 2.1, DESC.chamberR * 0.42) + (Math.random() - 0.5) * 0.2;
+    // Shaft walls: stacked stone rings from above the ledge to the floor.
+    const wallR = DESC.R0 + DESC.rampHalf + 0.4;
+    for (let y = 2.4; y > DESC.chamberY - 1.2; y -= 1.45) {
+      const radius = wallR + (Math.random() - 0.5) * 0.25;
       const ring = new THREE.Mesh(
-        jitterGeometry(new THREE.CylinderGeometry(radius, radius, 1.7, 12, 1, true), 0.14),
-        stoneMat
+        jitterGeometry(new THREE.CylinderGeometry(radius, radius, 1.7, 14, 1, true), 0.14),
+        wallMat
       );
       ring.position.set(DESC.cx, y - 0.7, DESC.cz);
       ring.rotation.y = Math.random() * Math.PI;
       scene.add(ring);
     }
 
-    // The chamber: wide cylindrical room under the shaft.
-    for (let y = DESC.chamberY + 0.8; y < DESC.chamberY + 6; y += 1.45) {
-      const ring = new THREE.Mesh(
-        jitterGeometry(new THREE.CylinderGeometry(DESC.chamberR + 0.6, DESC.chamberR + 0.6, 1.7, 14, 1, true), 0.16),
-        stoneMat
-      );
-      ring.position.set(DESC.cx, y, DESC.cz);
-      ring.rotation.y = Math.random() * Math.PI;
-      scene.add(ring);
-    }
-
-    // Chamber floor — subdivided disk, like the beach.
-    const floorGeo = new THREE.PlaneGeometry(34, 34, 9, 9);
+    // The floor — a subdivided disk spanning the whole shaft.
+    const floorGeo = new THREE.PlaneGeometry(36, 36, 9, 9);
     const fpos = floorGeo.attributes.position;
     for (let i = 0; i < fpos.count; i++) {
       const x = fpos.getX(i);
       const y = fpos.getY(i);
       const fr = Math.hypot(x, y);
-      if (fr > DESC.chamberR + 1) {
-        fpos.setX(i, (x / fr) * (DESC.chamberR + 1));
-        fpos.setY(i, (y / fr) * (DESC.chamberR + 1));
+      if (fr > wallR + 0.5) {
+        fpos.setX(i, (x / fr) * (wallR + 0.5));
+        fpos.setY(i, (y / fr) * (wallR + 0.5));
       }
     }
     const floor = new THREE.Mesh(floorGeo, rockMat);
@@ -935,12 +918,7 @@ export class World {
     floor.position.set(DESC.cx, DESC.chamberY + 0.05, DESC.cz);
     scene.add(floor);
 
-    // Chamber ceiling annulus (the shaft continues through the middle)
-    // and a cap over the whole pit so no sky is visible from below.
-    const ceiling = new THREE.Mesh(new THREE.RingGeometry(6.5, DESC.chamberR + 1, 14, 2), stoneMat);
-    ceiling.rotation.x = Math.PI / 2;
-    ceiling.position.set(DESC.cx, DESC.chamberY + 5.2, DESC.cz);
-    scene.add(ceiling);
+    // Cap over the shaft so no sky is visible from below.
     const cap = new THREE.Mesh(new THREE.CircleGeometry(19, 12), new THREE.MeshBasicMaterial({ color: 0x000000 }));
     cap.rotation.x = Math.PI / 2;
     cap.position.set(DESC.cx, 3.1, DESC.cz);
@@ -967,7 +945,7 @@ export class World {
     );
 
     // Faint warm lights: top of the shaft, mid-shaft, and the chamber.
-    for (const [y, intensity, distance] of [[1.5, 22, 20], [-9, 16, 18], [DESC.chamberY + 3, 38, 30]]) {
+    for (const [y, intensity, distance] of [[1.5, 32, 26], [-7, 28, 26], [DESC.chamberY + 3, 60, 40]]) {
       const light = new THREE.PointLight(0x8a6644, intensity, distance, 1.6);
       light.position.set(DESC.cx, y, DESC.cz);
       scene.add(light);

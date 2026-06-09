@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 
-// Internal render resolution — the whole game renders to this tiny target,
-// then gets upscaled with nearest-neighbor filtering. PSX games ran 320x240.
-export const RENDER_WIDTH = 320;
-export const RENDER_HEIGHT = 240;
+// Internal render resolution — the whole game renders to this small target,
+// then gets upscaled with nearest-neighbor filtering. 2x the PSX-native
+// 320x240: still chunky, but twice the clarity.
+export const RENDER_WIDTH = 640;
+export const RENDER_HEIGHT = 480;
 
 // Vertex positions snap to a grid at half the render resolution, which is
 // what produces the characteristic PSX polygon jitter as things move.
