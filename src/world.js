@@ -128,9 +128,8 @@ export class World {
     if (x > 400) return this.descentHeight(x, z);
 
     // Rolling parkland base.
-    let h =
-      this.rolling.noise2(x * 0.022, z * 0.022) * 1.1 +
-      this.detail.noise2(x * 0.085, z * 0.085) * 0.3;
+    const detailNoise = this.detail.noise2(x * 0.085, z * 0.085) * 0.3;
+    let h = this.rolling.noise2(x * 0.022, z * 0.022) * 1.1 + detailNoise;
     h = Math.max(h, -0.45);
 
     // Wagener Sledding Hill rises out of the north bank.
@@ -162,11 +161,15 @@ export class World {
     // Shallows where the crossing stones sit — wadeable, not drownable.
     if (x > -114 && x < -86 && z > -56 && z < -4) h = Math.max(h, -1.2);
 
-    // Keep a walkable land corridor under the footpaths.
+    // Keep a walkable land corridor under the footpaths, and flatten the surface geometry.
     if (this.protectPoints.length) {
       const d = World.distanceToPoints(this.protectPoints, x, z);
       const f = 1 - smoothstep(2.5, 8, d);
-      if (f > 0) h = THREE.MathUtils.lerp(h, Math.max(h, 0.2), f);
+      if (f > 0) {
+        // Flatten the micro-bumps (detail noise) on the path
+        h -= detailNoise * f;
+        h = THREE.MathUtils.lerp(h, Math.max(h, 0.2), f);
+      }
     }
 
     // Flatten the built-up Riverview Area so the structures sit naturally.

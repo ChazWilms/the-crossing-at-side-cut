@@ -5,7 +5,7 @@ const WALK_SPEED = 10.0;
 const SPRINT_SPEED = 17.0;
 const JUMP_VELOCITY = 7.5;
 const GRAVITY = -22;
-const MAX_STEP = 0.55; // taller ledges block movement instead of being climbed
+const MAX_STEP = 1.8; // Allow sprinting up steep hills without getting blocked
 
 const STAMINA_MAX = 100;
 const STAMINA_DRAIN = 22; // per second while sprinting
