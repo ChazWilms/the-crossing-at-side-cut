@@ -242,6 +242,19 @@ export class World {
 
     this.sun = new THREE.DirectionalLight(0xffa050, 2.0);
     this.sun.position.set(-80, 30, -30); // low in the west
+    
+    // Enable HD shadows for the sun over the entire map
+    this.sun.castShadow = true;
+    this.sun.shadow.camera.left = -500;
+    this.sun.shadow.camera.right = 500;
+    this.sun.shadow.camera.top = 500;
+    this.sun.shadow.camera.bottom = -500;
+    this.sun.shadow.camera.near = 0.5;
+    this.sun.shadow.camera.far = 1000;
+    this.sun.shadow.bias = -0.001;
+    this.sun.shadow.mapSize.width = 2048;
+    this.sun.shadow.mapSize.height = 2048;
+
     scene.add(this.sun);
   }
 
@@ -301,26 +314,16 @@ export class World {
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-    // De-index for true per-face normals: shader-side flatShading derives
-    // normals from screen derivatives, which degenerate on glancing
-    // triangles at 320x240 and flash black.
-    const flatGeo = geo.toNonIndexed();
-    flatGeo.computeVertexNormals();
-    const fn = flatGeo.attributes.normal;
-    for (let i = 0; i < fn.count; i += 3) {
-      // Average the three corners so each face is uniformly lit.
-      const nx = (fn.getX(i) + fn.getX(i + 1) + fn.getX(i + 2)) / 3;
-      const ny = (fn.getY(i) + fn.getY(i + 1) + fn.getY(i + 2)) / 3;
-      const nz = (fn.getZ(i) + fn.getZ(i + 1) + fn.getZ(i + 2)) / 3;
-      for (let k = 0; k < 3; k++) fn.setXYZ(i + k, nx, ny, nz);
-    }
+    // Compute smooth vertex normals for high fidelity PBR shading
+    geo.computeVertexNormals();
 
-    scene.add(
-      new THREE.Mesh(
-        flatGeo,
-        lambert({ map: tex.grassTexture(70), vertexColors: true })
-      )
+    const terrainMesh = new THREE.Mesh(
+      geo,
+      lambert({ map: tex.grassTexture(70), vertexColors: true })
     );
+    terrainMesh.receiveShadow = true;
+    terrainMesh.castShadow = true;
+    scene.add(terrainMesh);
 
     // Water sheet over the carved riverbed.
     const waterMat = lambert({ map: tex.waterTexture(80), color: 0xffff00 });
