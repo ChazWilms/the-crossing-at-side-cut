@@ -232,6 +232,25 @@ export function asphaltTexture(repeat) {
   }, repeat);
 }
 
+// Two-lane road: asphalt with a dashed yellow center line running along v.
+export function roadTexture() {
+  return makeTex(256, (ctx, S) => {
+    ctx.fillStyle = '#46474b';
+    ctx.fillRect(0, 0, S, S);
+    blotches(ctx, S, ['56,57,62', '64,66,72', '50,50,54'], 20, 30, 90, 0.3);
+    specks(ctx, S, ['#3b3c40', '#515257', '#36373a', '#5c5d63'], 6000, 1.5, 1.5);
+    // Worn edge lines.
+    ctx.fillStyle = 'rgba(215,210,195,0.5)';
+    ctx.fillRect(10, 0, 5, S);
+    ctx.fillRect(S - 15, 0, 5, S);
+    // Dashed center line.
+    ctx.fillStyle = 'rgba(214,178,70,0.85)';
+    for (let y = 0; y < S; y += 84) {
+      ctx.fillRect(S / 2 - 4, y, 8, 46);
+    }
+  });
+}
+
 // One-shot texture for the whole lot: asphalt with painted parking stalls.
 export function parkingLotTexture() {
   return makeTex(256, (ctx, S) => {

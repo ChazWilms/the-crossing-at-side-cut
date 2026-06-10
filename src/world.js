@@ -113,7 +113,8 @@ export class World {
     this.waterMaterials = [];
     this.spawn = new THREE.Vector3(14, 0, -101);
     this.towerPosition = new THREE.Vector3(152, 0, 58);
-    this.hillCenter = new THREE.Vector2(-175, -112); // Wagener Sledding Hill
+    // Wagener Sledding Hill — north of W River Road, like the real park.
+    this.hillCenter = new THREE.Vector2(-185, -138);
 
     this.rolling = new ValueNoise(1137);
     this.detail = new ValueNoise(4422);
@@ -356,6 +357,41 @@ export class World {
     this.skyMesh = new THREE.Mesh(skyGeo, skyMat);
     scene.add(this.skyMesh);
 
+    // The sun itself: a hot additive glow low in the west.
+    this.glowMat = new THREE.MeshBasicMaterial({
+      map: tex.mistTexture(),
+      color: 0xff9038,
+      transparent: true,
+      opacity: 0.9,
+      fog: false,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const sunGlow = new THREE.Mesh(new THREE.PlaneGeometry(340, 340), this.glowMat);
+    sunGlow.position.set(-560, 160, -210);
+    sunGlow.lookAt(0, 30, 0);
+    scene.add(sunGlow);
+
+    // A few long sunset clouds, lit from below.
+    this.cloudMat = new THREE.MeshBasicMaterial({
+      map: tex.mistTexture(),
+      color: 0xe09a78,
+      transparent: true,
+      opacity: 0.32,
+      fog: false,
+      depthWrite: false,
+    });
+    for (let i = 0; i < 10; i++) {
+      const w = 140 + Math.random() * 200;
+      const cloud = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.32), this.cloudMat);
+      const a = Math.random() * Math.PI * 2;
+      const r = 260 + Math.random() * 320;
+      cloud.position.set(Math.cos(a) * r, 140 + Math.random() * 110, Math.sin(a) * r);
+      cloud.rotation.x = -Math.PI / 2;
+      cloud.rotation.z = Math.random() * Math.PI;
+      scene.add(cloud);
+    }
+
     this.hemi = new THREE.HemisphereLight(0xffb070, 0x4a3b5c, 1.5);
     scene.add(this.hemi);
 
@@ -404,6 +440,8 @@ export class World {
     if (this.starMat) this.starMat.opacity = under ? 0 : factor * 0.9;
     if (this.moonMat) this.moonMat.opacity = under ? 0 : factor * 0.95;
     if (this.fireflyMat) this.fireflyMat.opacity = under ? 0 : 0.45 + factor * 0.45;
+    if (this.glowMat) this.glowMat.opacity = 0.9 * (1 - factor);
+    if (this.cloudMat) this.cloudMat.opacity = 0.32 * (1 - factor * 0.85);
   }
 
   buildTerrain(scene) {
@@ -510,6 +548,42 @@ export class World {
     this.buildShelter(scene, 6, -88);
     this.buildPlayground(scene, -16, -94);
     this.buildParkProps(scene);
+    this.buildRoad(scene);
+    this.buildCanalLocks(scene);
+  }
+
+  // W River Road: runs along the north side of the park, dividing the
+  // Riverview Area from the sledding hill — straight from the map data.
+  buildRoad(scene) {
+    this.buildRibbon(
+      scene,
+      [[-250, -75], [-185, -98], [-125, -125], [40, -138], [250, -150]],
+      3.5,
+      lambert({ map: tex.roadTexture() })
+    );
+  }
+
+  // The limestone canal locks Side Cut is named for — ruined parallel
+  // walls of the old Miami & Erie side cut, with a historical marker.
+  buildCanalLocks(scene) {
+    const stone = lambert({ map: tex.stoneTexture(4), side: THREE.DoubleSide });
+    const cx = 62;
+    const cz = -122;
+    const angle = -0.08; // roughly parallel to the road
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 4; i++) {
+        const len = 5 + Math.random() * 3;
+        const h = 1.6 + Math.random() * 0.9;
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(len, h, 1.1), stone);
+        const along = -9 + i * 6 + Math.random();
+        const x = cx + Math.cos(angle) * along - Math.sin(angle) * side * 2.6;
+        const z = cz + Math.sin(angle) * along + Math.cos(angle) * side * 2.6;
+        wall.position.set(x, this.heightAt(x, z) + h * 0.32, z);
+        wall.rotation.y = -angle + (Math.random() - 0.5) * 0.06;
+        scene.add(wall);
+      }
+    }
+    this.buildSign(scene, cx - 6, cz + 5);
   }
 
   // Park furnishings: the small human things that make the place feel

@@ -29,6 +29,14 @@ composer.addPass(bloomPass);
 // --- Version log shown on the menu screen ---
 const CHANGELOG = [
   {
+    v: '1.4.0',
+    items: [
+      'W River Road now divides the park from the sledding hill, matching the real Side Cut layout',
+      'The limestone canal locks the park is named for stand near the road, with a marker',
+      'A burning sun glow and sunset clouds in the western sky',
+    ],
+  },
+  {
     v: '1.3.0',
     items: [
       'GRAPHICS: all-new 256px detail textures (grass blades, pebbled dirt, river stones, strata, bark, asphalt cracks) with smooth anisotropic filtering',
