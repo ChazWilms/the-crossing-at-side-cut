@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 
 const EYE_HEIGHT = 1.7;
-const WALK_SPEED = 5.0;
-const SPRINT_SPEED = 8.5;
+const WALK_SPEED = 10.0;
+const SPRINT_SPEED = 17.0;
 const JUMP_VELOCITY = 7.5;
 const GRAVITY = -22;
 const MAX_STEP = 0.55; // taller ledges block movement instead of being climbed

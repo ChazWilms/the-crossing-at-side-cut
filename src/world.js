@@ -42,6 +42,10 @@ const rampY = (t) =>
 export function lambert(opts) {
   // PBR HD materials without flat shading!
   const newOpts = { ...opts, flatShading: false };
+  if (opts.map) {
+    newOpts.bumpMap = opts.map;
+    newOpts.bumpScale = 0.2;
+  }
   return applyRetroMaterial(new THREE.MeshStandardMaterial(newOpts));
 }
 
@@ -234,8 +238,26 @@ export class World {
   buildAtmosphere(scene) {
     this.scene = scene;
     const horizon = new THREE.Color(0xc46a47);
+    const zenith = new THREE.Color(0x3a4b6c);
     scene.background = horizon;
-    scene.fog = new THREE.Fog(horizon, 25, 140);
+    scene.fog = new THREE.FogExp2(horizon, 0.008);
+
+    // Create a sky dome with vertex colors to simulate a gradient sunset sky
+    const skyGeo = new THREE.SphereGeometry(800, 32, 16);
+    const pos = skyGeo.attributes.position;
+    const colors = new Float32Array(pos.count * 3);
+    for (let i = 0; i < pos.count; i++) {
+      const y = pos.getY(i);
+      const ratio = Math.max(0, Math.min(1, y / 200));
+      const c = horizon.clone().lerp(zenith, ratio);
+      colors[i * 3] = c.r;
+      colors[i * 3 + 1] = c.g;
+      colors[i * 3 + 2] = c.b;
+    }
+    skyGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    const skyMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false });
+    const sky = new THREE.Mesh(skyGeo, skyMat);
+    scene.add(sky);
 
     this.hemi = new THREE.HemisphereLight(0xffb070, 0x4a3b5c, 1.5);
     scene.add(this.hemi);

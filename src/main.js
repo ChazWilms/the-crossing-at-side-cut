@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { RetroRenderer, RENDER_WIDTH, RENDER_HEIGHT } from './retro.js';
 import { World } from './world.js';
 import { Player } from './player.js';
@@ -9,6 +12,14 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, RENDER_WIDTH / RENDER_HEIGHT, 0.1, 200);
 
 const retro = new RetroRenderer();
+
+// Post-Processing Pipeline
+const composer = new EffectComposer(retro.renderer);
+const renderPass = new RenderPass(scene, camera);
+composer.addPass(renderPass);
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(RENDER_WIDTH, RENDER_HEIGHT), 1.2, 0.4, 0.85);
+composer.addPass(bloomPass);
+
 const world = new World();
 world.build(scene);
 
@@ -205,6 +216,7 @@ function animate() {
   const ground = new THREE.Vector3(p.x, 0, p.z);
   checkTransitions(ground);
   audio.setAmbience(world.windLevel(p.x, p.z), world.riverProximity(p.x, p.z));
-  retro.render(scene, camera);
+  audio.setAmbience(world.windLevel(p.x, p.z), world.riverProximity(p.x, p.z));
+  composer.render();
 }
 animate();
