@@ -29,6 +29,14 @@ composer.addPass(bloomPass);
 // --- Version log shown on the menu screen ---
 const CHANGELOG = [
   {
+    v: '1.6.0',
+    items: [
+      'GRAPHICS: rocks, stones, and timber regain organic irregular shapes (smooth-shaded displacement)',
+      'GRAPHICS: cool rim light separates silhouettes from the dusk',
+      'GRAPHICS: car paint and playground plastic pick up real reflections',
+    ],
+  },
+  {
     v: '1.5.0',
     items: [
       'GRAPHICS: leaf-clump detail on every tree canopy instead of flat color',

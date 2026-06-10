@@ -97,8 +97,22 @@ const smoothstep = (e0, e1, x) => {
   return t * t * (3 - 2 * t);
 };
 
-// Jitter is removed for HD modern rendering
+// Organic displacement: hash-based so shared vertices move identically and
+// seams never crack. Half strength + smooth normals = natural irregularity
+// without the old low-poly facet look.
 export function jitterGeometry(geo, amount) {
+  const pos = geo.attributes.position;
+  const h = (x, y, z, s) => {
+    const v = Math.sin(x * 127.1 + y * 311.7 + z * 74.7 + s * 53.3) * 43758.5453;
+    return v - Math.floor(v) - 0.5;
+  };
+  const amt = amount * 0.55;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    pos.setXYZ(i, x + h(x, y, z, 1) * amt, y + h(x, y, z, 2) * amt, z + h(x, y, z, 3) * amt);
+  }
   geo.computeVertexNormals();
   return geo;
 }
@@ -395,6 +409,12 @@ export class World {
     this.hemi = new THREE.HemisphereLight(0xffb070, 0x4a3b5c, 1.5);
     scene.add(this.hemi);
 
+    // Cool rim light from the east — separates silhouettes from the dusk
+    // the way console games faked bounce light.
+    this.rim = new THREE.DirectionalLight(0x6a7eb8, 0.5);
+    this.rim.position.set(70, 22, 40);
+    scene.add(this.rim);
+
     this.sun = new THREE.DirectionalLight(0xffa050, 2.0);
     this.sun.position.set(-80, 30, -30); // low in the west
     
@@ -423,6 +443,7 @@ export class World {
     // Light intensity
     this.hemi.intensity = THREE.MathUtils.lerp(1.5, 0.26, factor);
     this.sun.intensity = THREE.MathUtils.lerp(2.0, 0, factor);
+    if (this.rim) this.rim.intensity = THREE.MathUtils.lerp(0.5, 0.12, factor);
 
     // Color transition
     const sunset = new THREE.Color(0xc46a47);
@@ -705,9 +726,11 @@ export class World {
 
   buildCar(scene, x, z, rotY) {
     const car = new THREE.Group();
-    const bodyMat = lambert({ color: 0xb0a487 }); // dusty beige sedan
-    const glassMat = lambert({ color: 0x2e3a40 });
-    const wheelMat = lambert({ color: 0x1d1d1f });
+    // Paint with a sheen, glass with a near-mirror finish — the env map
+    // gives both real reflections.
+    const bodyMat = lambert({ color: 0xb0a487, metalness: 0.55, roughness: 0.35 });
+    const glassMat = lambert({ color: 0x2e3a40, metalness: 0.8, roughness: 0.12 });
+    const wheelMat = lambert({ color: 0x1d1d1f, roughness: 0.9 });
 
     const body = new THREE.Mesh(jitterGeometry(new THREE.BoxGeometry(1.9, 1.0, 4.4, 2, 1, 3), 0.08), bodyMat);
     body.position.y = 0.8;
@@ -756,10 +779,11 @@ export class World {
   }
 
   buildPlayground(scene, x, z) {
-    const frameMat = lambert({ color: 0x4a6a8a }); // faded municipal blue
-    const accentMat = lambert({ color: 0x9e4436 }); // sun-bleached red
-    const slideMat = lambert({ color: 0xc9a832 });
-    const darkMat = lambert({ color: 0x26262a }); // rubber seats, chains
+    // Painted metal and plastic — smoother than wood and stone.
+    const frameMat = lambert({ color: 0x4a6a8a, metalness: 0.4, roughness: 0.45 });
+    const accentMat = lambert({ color: 0x9e4436, roughness: 0.5 });
+    const slideMat = lambert({ color: 0xc9a832, roughness: 0.35, metalness: 0.2 });
+    const darkMat = lambert({ color: 0x26262a, roughness: 0.85 }); // rubber
 
     // Platform tower with a pyramid roof.
     for (const px of [-1.1, 1.1]) {
