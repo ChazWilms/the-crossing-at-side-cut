@@ -57,10 +57,10 @@ export class Player {
     this.regenTimer = 0;
     this.keys = new Set();
 
-    // Audio hooks, wired up by main: onStep(sprinting), onLand().
     this.onStep = null;
     this.onLand = null;
     this.stepAccum = 0;
+    this.shakeTimer = 0;
 
     this.staminaFill = document.getElementById('stamina-fill');
 
@@ -154,6 +154,16 @@ export class Player {
     let speed = sprinting ? this.sprintSpeed : this.walkSpeed;
     if (this.crouching) speed *= 0.5;
     if (this.tripTimer > 0) speed = 0;
+    
+    // Camera shake effect
+    if (this.shakeTimer > 0) {
+      this.shakeTimer -= dt;
+      const shakeAmt = this.shakeTimer * 0.3;
+      this.pitchObject.rotation.z = Math.sin(performance.now() * 0.05) * shakeAmt;
+      this.pitchObject.rotation.x += Math.cos(performance.now() * 0.06) * shakeAmt * 0.1;
+    } else {
+      this.pitchObject.rotation.z = 0;
+    }
 
     const pos = this.yawObject.position;
     const footY = pos.y - this.currentEyeHeight;

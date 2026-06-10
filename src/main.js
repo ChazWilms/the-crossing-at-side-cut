@@ -235,6 +235,7 @@ function animate() {
     teleportCooldown = 3;
     player.disabled = true;
     player.forceLookAt(notDeer.position);
+    player.shakeTimer = 1.0;
     audio.creatureScream();
     
     setTimeout(() => {

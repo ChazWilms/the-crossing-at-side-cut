@@ -45,6 +45,43 @@ export class NotDeer extends THREE.Group {
       lambert({ color: 0x8f8c85, flatShading: true }) // Bone colored
     );
     this.head.position.set(1.8, 3.2, 0);
+    
+    // Glowing Red Eyes
+    const eyeGeo = new THREE.SphereGeometry(0.06, 8, 8);
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 3.0 });
+    const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+    leftEye.position.set(0.18, 0.1, 0.2);
+    const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+    rightEye.position.set(0.18, 0.1, -0.2);
+    this.head.add(leftEye);
+    this.head.add(rightEye);
+    
+    // Face Glow
+    const faceLight = new THREE.PointLight(0xff0000, 2.0, 4);
+    faceLight.position.set(0.3, 0, 0);
+    this.head.add(faceLight);
+
+    // Twisted Antlers
+    const antlerMat = lambert({ map: tex.barkTexture(2), color: 0x332222 });
+    const addAntlerBranch = (parent, x, y, z, rx, rz, scale) => {
+      const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.04 * scale, 0.08 * scale, 1.2 * scale, 5), antlerMat);
+      branch.position.set(x, y, z);
+      branch.rotation.x = rx;
+      branch.rotation.z = rz;
+      parent.add(branch);
+      return branch;
+    };
+    
+    // Left Antler System
+    const leftBase = addAntlerBranch(this.head, -0.1, 0.5, 0.25, 0.2, -0.4, 1.0);
+    addAntlerBranch(leftBase, 0, 0.4, 0.2, 0.5, 0.2, 0.6);
+    addAntlerBranch(leftBase, 0, 0.7, -0.1, -0.3, -0.2, 0.4);
+    
+    // Right Antler System (Asymmetric)
+    const rightBase = addAntlerBranch(this.head, -0.1, 0.6, -0.25, -0.3, -0.5, 1.1);
+    addAntlerBranch(rightBase, 0, 0.5, -0.2, -0.6, 0.1, 0.7);
+    addAntlerBranch(rightBase, 0, 0.2, 0.1, 0.4, -0.3, 0.5);
+
     this.add(this.head);
 
     // Legs
