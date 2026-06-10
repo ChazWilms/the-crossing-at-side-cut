@@ -21,10 +21,26 @@ scene.add(player.yawObject);
 const audio = new GameAudio();
 
 const notDeer = new NotDeer();
-// Spawn at the bottom of the tower: x=500, z=0 is the center, so offset slightly
 const notDeerSpawn = new THREE.Vector3(495, -16, 5);
 notDeer.position.copy(notDeerSpawn);
 scene.add(notDeer);
+
+// Fuel Cans
+const fuelCans = [];
+const canGeo = new THREE.BoxGeometry(0.3, 0.4, 0.2);
+const canMat = new THREE.MeshBasicMaterial({ color: 0xaa2222 }); // Red jerrycans
+
+const spawnFuelCan = (x, z, yOffset = 0.2) => {
+  const mesh = new THREE.Mesh(canGeo, canMat);
+  mesh.position.set(x, world.getGroundHeight(x, z) + yOffset, z);
+  scene.add(mesh);
+  fuelCans.push(mesh);
+};
+
+// Spawn a few cans around the map
+spawnFuelCan(80, 15);     // Forest
+spawnFuelCan(120, -5);    // Path
+spawnFuelCan(485, 12, -15); // Tower basement ledge
 player.onStep = (sprinting) => {
   const p = player.yawObject.position;
   audio.footstep(world.surfaceAt(p.x, p.z), sprinting);
@@ -128,6 +144,20 @@ function animate() {
   teleportCooldown = Math.max(0, teleportCooldown - dt);
   if (document.pointerLockElement || debug) {
     player.update(dt);
+  }
+
+  // Fuel collection logic
+  for (let i = fuelCans.length - 1; i >= 0; i--) {
+    const can = fuelCans[i];
+    // Rotate slightly for visibility
+    can.rotation.y += dt;
+    if (can.position.distanceTo(player.yawObject.position) < 2.0) {
+      player.fuel = 100;
+      scene.remove(can);
+      fuelCans.splice(i, 1);
+      // Play a simple pickup sound
+      audio.burst({ dur: 0.1, freq: 800, gain: 0.2 });
+    }
   }
 
   // Handle the chase transition

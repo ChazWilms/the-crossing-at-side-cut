@@ -25,7 +25,11 @@ export class Player {
     this.walkSpeed = WALK_SPEED;
     this.sprintSpeed = SPRINT_SPEED;
     this.eyeHeight = EYE_HEIGHT;
+    this.currentEyeHeight = EYE_HEIGHT;
     this.chaseActive = false;
+    this.fuel = 100;
+    this.tripTimer = 0;
+    this.crouching = false;
 
     // Hand-held lamp
     this.lampGroup = new THREE.Group();
@@ -76,7 +80,7 @@ export class Player {
 
   spawnAt(position) {
     this.yawObject.position.copy(position);
-    this.yawObject.position.y = this.getGroundHeight(position.x, position.z) + this.eyeHeight;
+    this.yawObject.position.y = this.getGroundHeight(position.x, position.z) + this.currentEyeHeight;
   }
 
   setChaseMode(active) {
@@ -96,26 +100,49 @@ export class Player {
     const moving = input.lengthSq() > 0;
     if (moving) input.normalize().applyQuaternion(this.yawObject.quaternion);
 
+    // --- New Mechanics: Crouching, Glancing, Fuel, Tripping ---
+    this.crouching = this.keys.has('KeyC') || this.keys.has('ControlLeft');
+    this.pitchObject.rotation.y = this.keys.has('KeyQ') ? Math.PI : 0;
+    
+    this.fuel = Math.max(0, this.fuel - dt * 1.5);
+    this.lampLight.intensity = (this.fuel > 0 ? 2.0 : 0) * (this.fuel < 20 ? 0.3 + 0.7 * Math.random() : 1.0);
+
     // --- Sprint & stamina ---
     const wantsSprint = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
-    const sprinting = wantsSprint && moving && this.stamina > 0;
+    const sprinting = wantsSprint && moving && this.stamina > 0 && !this.crouching;
+
     if (sprinting) {
       this.stamina = Math.max(0, this.stamina - STAMINA_DRAIN * dt);
       this.regenTimer = 0;
+      // Tripping mechanic
+      if (this.stamina <= 0 && this.tripTimer <= 0) {
+        this.tripTimer = 2.0;
+      }
     } else {
-      this.regenTimer += dt;
-      if (this.regenTimer > REGEN_DELAY) {
-        this.stamina = Math.min(STAMINA_MAX, this.stamina + STAMINA_REGEN * dt);
+      if (this.tripTimer > 0) {
+        this.tripTimer -= dt;
+      } else {
+        this.regenTimer += dt;
+        if (this.regenTimer > REGEN_DELAY) {
+          this.stamina = Math.min(STAMINA_MAX, this.stamina + STAMINA_REGEN * dt);
+        }
       }
     }
     if (this.staminaFill) {
       this.staminaFill.style.transform = `scaleX(${this.stamina / STAMINA_MAX})`;
     }
 
+    // Dynamic Eye Height
+    const targetHeight = this.tripTimer > 0 ? 0.5 : (this.crouching ? 1.0 : this.eyeHeight);
+    this.currentEyeHeight = THREE.MathUtils.lerp(this.currentEyeHeight, targetHeight, dt * 8.0);
+
     // --- Horizontal movement with simple step-based collision ---
-    const speed = sprinting ? this.sprintSpeed : this.walkSpeed;
+    let speed = sprinting ? this.sprintSpeed : this.walkSpeed;
+    if (this.crouching) speed *= 0.5;
+    if (this.tripTimer > 0) speed = 0;
+
     const pos = this.yawObject.position;
-    const footY = pos.y - this.eyeHeight;
+    const footY = pos.y - this.currentEyeHeight;
     const step = input.clone().multiplyScalar(speed * dt);
     const nextGround = this.getGroundHeight(pos.x + step.x, pos.z + step.z);
     if (nextGround - footY <= MAX_STEP) {
@@ -126,7 +153,7 @@ export class Player {
         this.stepAccum += Math.hypot(step.x, step.z);
         if (this.stepAccum >= (sprinting ? 2.6 : 2.0)) {
           this.stepAccum = 0;
-          this.onStep?.(sprinting);
+          if (!this.crouching) this.onStep?.(sprinting);
         }
       }
     }
@@ -149,8 +176,8 @@ export class Player {
     pos.y += this.velocity.y * dt;
 
     const ground = this.getGroundHeight(pos.x, pos.z);
-    if (pos.y - this.eyeHeight <= ground) {
-      pos.y = ground + this.eyeHeight;
+    if (pos.y - this.currentEyeHeight <= ground) {
+      pos.y = ground + this.currentEyeHeight;
       if (!this.grounded && this.velocity.y < -5) this.onLand?.();
       this.velocity.y = 0;
       this.grounded = true;
