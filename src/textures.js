@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 // All textures are generated at runtime onto tiny canvases — 64x64 with
 // nearest filtering reads as authentically low-budget PSX.
-const SIZE = 64;
+const SIZE = 1024;
 
 function makeCanvasTexture(draw, repeat = 1) {
   const canvas = document.createElement('canvas');
@@ -10,10 +10,10 @@ function makeCanvasTexture(draw, repeat = 1) {
   canvas.height = SIZE;
   draw(canvas.getContext('2d'));
   const tex = new THREE.CanvasTexture(canvas);
-  tex.magFilter = THREE.NearestFilter; // chunky up close
+  tex.magFilter = THREE.LinearFilter; // chunky up close
   // Mipmapped minification: without it every textured surface shimmers
   // and crawls as the camera moves, which reads as "shifting pixels".
-  tex.minFilter = THREE.NearestMipmapLinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.generateMipmaps = true;
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
@@ -56,14 +56,14 @@ export function riverRockTexture(repeat) {
     ctx.fillStyle = '#76726a';
     ctx.fillRect(0, 0, SIZE, SIZE);
     // Round overlapping pebbles.
-    for (let i = 0; i < 90; i++) {
+    for (let i = 0; i < 90 * 16 * 16; i++) {
       const shade = 95 + Math.floor(Math.random() * 70);
       ctx.fillStyle = `rgb(${shade}, ${shade - 4}, ${shade - 10})`;
       ctx.beginPath();
       ctx.arc(
         Math.random() * SIZE,
         Math.random() * SIZE,
-        2 + Math.random() * 4,
+        (2 + Math.random() * 4) * 16,
         0,
         Math.PI * 2
       );
@@ -77,15 +77,15 @@ export function stoneTexture(repeat) {
     ctx.fillStyle = '#878276';
     ctx.fillRect(0, 0, SIZE, SIZE);
     // Horizontal strata — reads as stacked flat stones on the tower.
-    for (let y = 0; y < SIZE; y += 4 + Math.floor(Math.random() * 3)) {
+    for (let y = 0; y < SIZE; y += (4 + Math.floor(Math.random() * 3)) * 16) {
       const shade = 105 + Math.floor(Math.random() * 60);
       ctx.fillStyle = `rgb(${shade}, ${shade - 5}, ${shade - 12})`;
-      ctx.fillRect(0, y, SIZE, 3 + Math.floor(Math.random() * 2));
+      ctx.fillRect(0, y, SIZE, (3 + Math.floor(Math.random() * 2)) * 16);
       ctx.fillStyle = 'rgba(20, 18, 14, 0.6)';
-      ctx.fillRect(0, y - 1, SIZE, 1);
+      ctx.fillRect(0, y - 16, SIZE, 16);
       // Vertical joints between stones.
-      for (let x = Math.floor(Math.random() * 8); x < SIZE; x += 6 + Math.floor(Math.random() * 8)) {
-        ctx.fillRect(x, y, 1, 4);
+      for (let x = Math.floor(Math.random() * 8) * 16; x < SIZE; x += (6 + Math.floor(Math.random() * 8)) * 16) {
+        ctx.fillRect(x, y, 16, 4 * 16);
       }
     }
   }, repeat);
@@ -95,10 +95,10 @@ export function barkTexture(repeat) {
   return makeCanvasTexture((ctx) => {
     ctx.fillStyle = '#4d3f2f';
     ctx.fillRect(0, 0, SIZE, SIZE);
-    for (let x = 0; x < SIZE; x += 2 + Math.floor(Math.random() * 3)) {
+    for (let x = 0; x < SIZE; x += (2 + Math.floor(Math.random() * 3)) * 16) {
       const shade = 50 + Math.floor(Math.random() * 35);
       ctx.fillStyle = `rgb(${shade + 15}, ${shade}, ${Math.floor(shade * 0.7)})`;
-      ctx.fillRect(x, 0, 1 + Math.floor(Math.random() * 2), SIZE);
+      ctx.fillRect(x, 0, (1 + Math.floor(Math.random() * 2)) * 16, SIZE);
     }
   }, repeat);
 }

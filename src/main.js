@@ -136,6 +136,20 @@ function checkTransitions(p) {
   }
 }
 
+// Enable shadows globally for all built objects
+scene.traverse((child) => {
+  if (child.isMesh) {
+    child.castShadow = true;
+    child.receiveShadow = true;
+  }
+  if (child.isLight && child.type !== 'HemisphereLight') {
+    child.castShadow = true;
+    child.shadow.mapSize.width = 1024;
+    child.shadow.mapSize.height = 1024;
+    child.shadow.bias = -0.001;
+  }
+});
+
 // --- Main loop ---
 const clock = new THREE.Clock();
 function animate() {

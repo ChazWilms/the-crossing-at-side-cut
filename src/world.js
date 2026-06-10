@@ -40,7 +40,9 @@ const rampY = (t) =>
   Math.max(-DESC.drop * Math.max(0, t - DESC.ledge), DESC.chamberY);
 
 export function lambert(opts) {
-  return applyRetroMaterial(new THREE.MeshLambertMaterial(opts));
+  // PBR HD materials without flat shading!
+  const newOpts = { ...opts, flatShading: false };
+  return applyRetroMaterial(new THREE.MeshStandardMaterial(newOpts));
 }
 
 // --- Seeded value noise, shared by the terrain mesh and collision so the
@@ -91,25 +93,8 @@ const smoothstep = (e0, e1, x) => {
   return t * t * (3 - 2 * t);
 };
 
-// Hand-modeled jank: displace vertices by a hash of their position, so
-// shared/seam vertices move identically and meshes never crack.
+// Jitter is removed for HD modern rendering
 export function jitterGeometry(geo, amount) {
-  const pos = geo.attributes.position;
-  const h = (x, y, z, s) => {
-    const v = Math.sin(x * 127.1 + y * 311.7 + z * 74.7 + s * 53.3) * 43758.5453;
-    return v - Math.floor(v) - 0.5;
-  };
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i);
-    const y = pos.getY(i);
-    const z = pos.getZ(i);
-    pos.setXYZ(
-      i,
-      x + h(x, y, z, 1) * amount,
-      y + h(x, y, z, 2) * amount,
-      z + h(x, y, z, 3) * amount
-    );
-  }
   geo.computeVertexNormals();
   return geo;
 }
