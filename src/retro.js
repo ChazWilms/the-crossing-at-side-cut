@@ -18,7 +18,8 @@ export function applyRetroMaterial(material) {
 export class RetroRenderer {
   constructor(canvasParent = document.body) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setPixelRatio(window.devicePixelRatio);
+    // Cap the pixel ratio — full retina with bloom + shadows is brutal on laptops.
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     
     // Enable High-Quality Shadows

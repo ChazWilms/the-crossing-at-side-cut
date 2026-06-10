@@ -25,6 +25,13 @@ composer.addPass(bloomPass);
 // --- Version log shown on the menu screen ---
 const CHANGELOG = [
   {
+    v: '0.9.0',
+    items: [
+      'Compass strip up top: cardinal directions, diamonds for unfound effigies, the tower once it opens',
+      'Sharper performance on laptops (render scale capped)',
+    ],
+  },
+  {
     v: '0.8.0',
     items: [
       'Crickets at dusk, an owl somewhere across the river — silent underground',
@@ -176,6 +183,55 @@ scene.add(doorSlab);
 
 // Scattered notes telling the story of the last person who came here.
 const notes = new Notes(scene, world);
+
+// --- Compass strip: cardinals, uncollected effigies, and (once open) the tower ---
+const compassEl = document.getElementById('compass');
+const compassMarks = [];
+function addMark(label, cls) {
+  const el = document.createElement('div');
+  el.className = 'mk' + (cls ? ' ' + cls : '');
+  el.textContent = label;
+  compassEl.appendChild(el);
+  return el;
+}
+for (const [label, ang] of [['N', Math.PI], ['E', Math.PI / 2], ['S', 0], ['W', -Math.PI / 2]]) {
+  compassMarks.push({ el: addMark(label, ''), fixedAngle: ang });
+}
+const effigyMarks = effigies.items.map((it) => ({
+  el: addMark('◆', 'eff'),
+  target: it.group.position,
+  item: it,
+}));
+const towerMark = { el: addMark('▲', 'tower') };
+
+function updateCompass(p, yaw) {
+  const camAngle = yaw + Math.PI; // camera looks along -z of the yaw frame
+  const place = (el, angTo) => {
+    let d = angTo - camAngle;
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    if (Math.abs(d) < 0.75) {
+      el.style.display = 'block';
+      el.style.left = `${50 + (d / 0.75) * 50}%`;
+    } else {
+      el.style.display = 'none';
+    }
+  };
+  compassEl.style.display = underground ? 'none' : 'block';
+  if (underground) return;
+  for (const m of compassMarks) place(m.el, m.fixedAngle);
+  for (const m of effigyMarks) {
+    if (m.item.collected) {
+      m.el.style.display = 'none';
+      continue;
+    }
+    place(m.el, Math.atan2(m.target.x - p.x, m.target.z - p.z));
+  }
+  if (effigies.allCollected && !chaseActive) {
+    place(towerMark.el, Math.atan2(world.doorPosition.x - p.x, world.doorPosition.z - p.z));
+  } else {
+    towerMark.el.style.display = 'none';
+  }
+}
 
 // --- The watcher: before you ever reach the tower, the deer is sometimes
 // just... there, in the treeline, facing you. Get close and it's gone.
@@ -512,6 +568,7 @@ function animate() {
   const ground = new THREE.Vector3(p.x, 0, p.z);
   checkTransitions(ground);
   audio.setAmbience(world.windLevel(p.x, p.z), world.riverProximity(p.x, p.z));
+  updateCompass(p, player.yawObject.rotation.y);
   composer.render();
 }
 animate();
