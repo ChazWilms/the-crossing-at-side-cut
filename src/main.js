@@ -25,6 +25,14 @@ composer.addPass(bloomPass);
 // --- Version log shown on the menu screen ---
 const CHANGELOG = [
   {
+    v: '0.8.0',
+    items: [
+      'Crickets at dusk, an owl somewhere across the river — silent underground',
+      'Your heartbeat surfaces when you are spent, and pounds through the chase',
+      'The Not-Deer screeches as it closes in',
+    ],
+  },
+  {
     v: '0.7.0',
     items: [
       'The park is furnished: picnic tables, benches along the trail, trash cans, a trailhead sign',
@@ -457,6 +465,7 @@ function animate() {
   }
   const exhaustion = 1 - player.stamina / player.staminaMax;
   vignetteEl.style.opacity = Math.min(0.85, exhaustion * 0.55 + (chaseActive ? 0.3 : 0));
+  audio.setHeartbeat(Math.max(0, exhaustion - 0.45) * 1.1 + (chaseActive ? 0.45 : 0));
 
   notDeer.update(dt, player, world, audio);
   const p = player.yawObject.position;

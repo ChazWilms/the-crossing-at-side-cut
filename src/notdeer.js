@@ -210,6 +210,8 @@ export class NotDeer extends THREE.Group {
         this.position.z += dir.z * speed * dt;
         this.rotation.y = Math.atan2(dir.x, dir.z);
       }
+      // Ragged screeches as it closes in.
+      if (Math.random() < dt * 0.12 && dist < 45) audio.creatureCry();
       this.position.y = world.getGroundHeight(this.position.x, this.position.z);
     } else {
       this.position.y = world.getGroundHeight(this.position.x, this.position.z);

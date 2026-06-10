@@ -67,6 +67,96 @@ export class GameAudio {
 
     this.startMusic();
     this.startTracks();
+    this.startWildlife();
+    this.startHeartbeat();
+  }
+
+  // Crickets and a distant owl — the park still sounds alive, until it isn't.
+  startWildlife() {
+    const ctx = this.ctx;
+    this.cricketGain = ctx.createGain();
+    this.cricketGain.gain.value = 0.5;
+    this.cricketGain.connect(this.master);
+
+    const chirp = () => {
+      const t = ctx.currentTime + 0.02;
+      const pulses = 3 + Math.floor(Math.random() * 3);
+      const f = 4100 + Math.random() * 600;
+      for (let i = 0; i < pulses; i++) {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = f;
+        const g = ctx.createGain();
+        const start = t + i * 0.045;
+        g.gain.setValueAtTime(0, start);
+        g.gain.linearRampToValueAtTime(0.018, start + 0.008);
+        g.gain.linearRampToValueAtTime(0, start + 0.035);
+        osc.connect(g).connect(this.cricketGain);
+        osc.start(start);
+        osc.stop(start + 0.05);
+      }
+      setTimeout(chirp, 350 + Math.random() * 1200);
+    };
+    chirp();
+
+    const owl = () => {
+      if (this.cricketGain.gain.value > 0.05) {
+        const t = ctx.currentTime + 0.02;
+        for (const [f0, delay, dur] of [[335, 0, 0.45], [300, 0.55, 0.7]]) {
+          const osc = ctx.createOscillator();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(f0, t + delay);
+          osc.frequency.linearRampToValueAtTime(f0 - 18, t + delay + dur);
+          const g = ctx.createGain();
+          g.gain.setValueAtTime(0, t + delay);
+          g.gain.linearRampToValueAtTime(0.05, t + delay + 0.12);
+          g.gain.linearRampToValueAtTime(0, t + delay + dur);
+          osc.connect(g).connect(this.master);
+          osc.start(t + delay);
+          osc.stop(t + delay + dur + 0.05);
+        }
+      }
+      setTimeout(owl, 30000 + Math.random() * 45000);
+    };
+    setTimeout(owl, 15000);
+  }
+
+  // A lub-dub that rises with exhaustion and the chase. Level set per frame.
+  startHeartbeat() {
+    this.heartLevel = 0;
+    const beat = () => {
+      if (this.heartLevel > 0.03) {
+        const g = 0.3 * this.heartLevel;
+        this.knock({ freq: 58, freqEnd: 40, dur: 0.1, gain: g });
+        this.knock({ freq: 52, freqEnd: 36, dur: 0.09, gain: g * 0.7, delay: 0.18 });
+      }
+      setTimeout(beat, 1000 - 350 * Math.min(1, this.heartLevel));
+    };
+    beat();
+  }
+
+  setHeartbeat(level) {
+    this.heartLevel = Math.min(1, Math.max(0, level));
+  }
+
+  /** A shorter ragged screech used mid-chase. */
+  creatureCry() {
+    if (!this.started) return;
+    const t = this.ctx.currentTime + 0.02;
+    for (const det of [-14, 11]) {
+      const osc = this.ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(430 + det * 2, t);
+      osc.frequency.exponentialRampToValueAtTime(130, t + 0.5);
+      osc.detune.value = det;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.09, t + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+      osc.connect(g).connect(this.master);
+      osc.start(t);
+      osc.stop(t + 0.7);
+    }
   }
 
   // Real background music (Kevin MacLeod, CC-BY — credited in the README):
@@ -336,6 +426,10 @@ export class GameAudio {
     const t = this.ctx.currentTime;
     this.windGain.gain.setTargetAtTime(windLevel * 0.13, t, 0.8);
     this.riverGain.gain.setTargetAtTime(riverLevel * 0.3, t, 0.4);
+    // Crickets live on the surface; underground (wind 0) they go silent.
+    if (this.cricketGain) {
+      this.cricketGain.gain.setTargetAtTime(windLevel > 0.01 ? 0.5 : 0, t, 1.2);
+    }
   }
 
   // --- One-shot synthesis helpers ---
