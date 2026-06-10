@@ -67,6 +67,8 @@ export class Player {
     this.velocity = new THREE.Vector3();
     this.grounded = false;
     this.stamina = STAMINA_MAX;
+    this.staminaMax = STAMINA_MAX;
+    this.sprinting = false;
     this.regenTimer = 0;
     this.keys = new Set();
 
@@ -138,6 +140,7 @@ export class Player {
     // --- Sprint & stamina ---
     const wantsSprint = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
     const sprinting = wantsSprint && moving && this.stamina > 0 && !this.crouching;
+    this.sprinting = sprinting; // read by main for the FOV kick
 
     if (sprinting) {
       this.stamina = Math.max(0, this.stamina - STAMINA_DRAIN * dt);

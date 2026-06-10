@@ -213,6 +213,100 @@ export class World {
     this.buildUndergrowth(scene);
     this.buildBeachAndTower(scene);
     this.buildDescent(scene);
+    this.buildMist(scene);
+    this.buildFireflies(scene);
+    this.buildNightSky(scene);
+  }
+
+  // Drifting fog cards: soft billboards that slide slowly over the river
+  // and the island floor.
+  buildMist(scene) {
+    this.mist = [];
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex.mistTexture(),
+      transparent: true,
+      opacity: 0.16,
+      depthWrite: false,
+    });
+    const spots = [];
+    for (let i = 0; i < 26; i++) {
+      // Half over the channels, half through the island woods.
+      const overRiver = i % 2 === 0;
+      const x = THREE.MathUtils.lerp(-220, 220, Math.random());
+      const z = overRiver
+        ? (Math.random() < 0.5 ? -30 : 120) + (Math.random() - 0.5) * 24
+        : THREE.MathUtils.lerp(-5, 95, Math.random());
+      spots.push([x, z]);
+    }
+    for (const [x, z] of spots) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(16 + Math.random() * 10, 4.5), mat);
+      const y = Math.max(this.heightAt(x, z), WATER_Y) + 1.1;
+      m.position.set(x, y, z);
+      scene.add(m);
+      this.mist.push({ m, speed: 0.25 + Math.random() * 0.4, phase: Math.random() * 10 });
+    }
+  }
+
+  // Fireflies drifting between the trees at dusk.
+  buildFireflies(scene) {
+    const N = 130;
+    const pos = new Float32Array(N * 3);
+    this.fireflyBase = new Float32Array(N * 3);
+    this.fireflyPhase = new Float32Array(N);
+    const island = bands.blue_grass_island;
+    for (let i = 0; i < N; i++) {
+      const x = THREE.MathUtils.lerp(island.x[0], island.x[1], Math.random());
+      const z = THREE.MathUtils.lerp(island.z[0] - 30, island.z[1], Math.random());
+      const y = Math.max(this.heightAt(x, z), -0.4) + 0.7 + Math.random() * 1.8;
+      pos.set([x, y, z], i * 3);
+      this.fireflyBase.set([x, y, z], i * 3);
+      this.fireflyPhase[i] = Math.random() * Math.PI * 2;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    this.fireflyMat = new THREE.PointsMaterial({
+      color: 0xd8efa0,
+      size: 0.14,
+      transparent: true,
+      opacity: 0.55,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.fireflies = new THREE.Points(geo, this.fireflyMat);
+    scene.add(this.fireflies);
+  }
+
+  // Stars and a moon, revealed as the night factor rises.
+  buildNightSky(scene) {
+    const N = 420;
+    const pos = new Float32Array(N * 3);
+    for (let i = 0; i < N; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const elev = Math.random() * Math.PI * 0.46 + 0.06;
+      const r = 720;
+      pos.set(
+        [r * Math.cos(elev) * Math.cos(a), r * Math.sin(elev), r * Math.cos(elev) * Math.sin(a)],
+        i * 3
+      );
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    this.starMat = new THREE.PointsMaterial({
+      color: 0xcdd8ee,
+      size: 2.0,
+      sizeAttenuation: false,
+      transparent: true,
+      opacity: 0,
+      fog: false,
+      depthWrite: false,
+    });
+    scene.add(new THREE.Points(geo, this.starMat));
+
+    this.moonMat = new THREE.MeshBasicMaterial({ color: 0xdde6f2, transparent: true, opacity: 0, fog: false });
+    const moon = new THREE.Mesh(new THREE.CircleGeometry(26, 24), this.moonMat);
+    moon.position.set(320, 330, 260);
+    moon.lookAt(0, 0, 0);
+    scene.add(moon);
   }
 
   // Path centerlines are needed before the terrain builds (land protection),
@@ -304,6 +398,10 @@ export class World {
     this.scene.fog.density = THREE.MathUtils.lerp(0.0105, 0.055, factor);
     // The sunset sky dome fades out as night (or the underground) takes over.
     if (this.skyMesh) this.skyMesh.material.opacity = 1 - factor;
+    // Stars, moon, and fireflies belong to the surface night.
+    if (this.starMat) this.starMat.opacity = under ? 0 : factor * 0.9;
+    if (this.moonMat) this.moonMat.opacity = under ? 0 : factor * 0.95;
+    if (this.fireflyMat) this.fireflyMat.opacity = under ? 0 : 0.45 + factor * 0.45;
   }
 
   buildTerrain(scene) {
@@ -676,6 +774,20 @@ export class World {
     const pineGeos = [];
     const oakGeos = [];
 
+    // Every tree gets its own shade of green baked into vertex colors so
+    // the forest reads as individuals instead of a copy-pasted block.
+    const tintGeo = (geo, base) => {
+      const c = base
+        .clone()
+        .offsetHSL((Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.12, (Math.random() - 0.5) * 0.1);
+      const n = geo.attributes.position.count;
+      const arr = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) arr.set([c.r, c.g, c.b], i * 3);
+      geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+    };
+    const pineGreen = new THREE.Color(0x2f4226);
+    const oakGreen = new THREE.Color(0x4a5c30);
+
     // Jittered conifer: leaning tapered trunk, 3-4 irregular cone tiers.
     const addPine = (x, z) => {
       const y = this.heightAt(x, z);
@@ -699,6 +811,7 @@ export class World {
           (Math.random() - 0.5) * 0.5
         );
         cone.translate(x, y, z);
+        tintGeo(cone, pineGreen);
         pineGeos.push(cone);
       }
     };
@@ -722,6 +835,7 @@ export class World {
           y + height + (Math.random() - 0.5) * 1.4,
           z + (Math.random() - 0.5) * 2.4
         );
+        tintGeo(blob, oakGreen);
         oakGeos.push(blob);
       }
     };
@@ -757,10 +871,10 @@ export class World {
 
     scene.add(new THREE.Mesh(mergeGeometries(trunkGeos), lambert({ map: tex.barkTexture(1) })));
     scene.add(
-      new THREE.Mesh(mergeGeometries(pineGeos), lambert({ color: 0x2f4226, flatShading: true }))
+      new THREE.Mesh(mergeGeometries(pineGeos), lambert({ color: 0xffffff, vertexColors: true }))
     );
     scene.add(
-      new THREE.Mesh(mergeGeometries(oakGeos), lambert({ color: 0x4a5c30, flatShading: true }))
+      new THREE.Mesh(mergeGeometries(oakGeos), lambert({ color: 0xffffff, vertexColors: true }))
     );
   }
 
@@ -1094,7 +1208,28 @@ export class World {
     return z > island.z[0] && z < island.z[1] && x > island.x[0] && x < island.x[1] ? 1 : 0.45;
   }
 
-  update(dt) {
+  update(dt, playerPos) {
+    // Mist cards drift east and always face the player.
+    if (this.mist) {
+      this.mistTime = (this.mistTime ?? 0) + dt;
+      for (const f of this.mist) {
+        f.m.position.x += f.speed * dt;
+        if (f.m.position.x > 240) f.m.position.x = -240;
+        if (playerPos) f.m.lookAt(playerPos.x, f.m.position.y, playerPos.z);
+      }
+    }
+    // Fireflies wander and bob.
+    if (this.fireflies) {
+      const t = performance.now() * 0.001;
+      const pos = this.fireflies.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const p = this.fireflyPhase[i];
+        pos.setY(i, this.fireflyBase[i * 3 + 1] + Math.sin(t * 1.1 + p) * 0.5);
+        pos.setX(i, this.fireflyBase[i * 3] + Math.sin(t * 0.4 + p * 2) * 0.9);
+      }
+      pos.needsUpdate = true;
+    }
+
     // Scrolling layers + slow rolling waves sell the river current.
     for (const w of this.waterMaterials) {
       if (w.mat.map) {

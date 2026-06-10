@@ -132,6 +132,24 @@ export function concreteTexture(repeat) {
   return noiseTexture('#9a9588', ['#8d8a7e', '#a8a294', '#827d70', '#b3ac9c'], 0.4, repeat);
 }
 
+// Soft radial mist puff for drifting fog cards — smooth-filtered, unlike
+// the pixel textures.
+export function mistTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createRadialGradient(64, 64, 4, 64, 64, 62);
+  grad.addColorStop(0, 'rgba(235, 230, 220, 0.5)');
+  grad.addColorStop(0.55, 'rgba(225, 220, 210, 0.22)');
+  grad.addColorStop(1, 'rgba(220, 215, 205, 0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(canvas);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 // Transparent grass blades for cross-quad tufts (used with alphaTest).
 export function grassBladeTexture() {
   return makeCanvasTexture((ctx) => {

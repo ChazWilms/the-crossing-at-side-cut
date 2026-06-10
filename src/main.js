@@ -24,6 +24,15 @@ composer.addPass(bloomPass);
 // --- Version log shown on the menu screen ---
 const CHANGELOG = [
   {
+    v: '0.4.0',
+    items: [
+      'Ground mist drifts over the river and through the island woods',
+      'Fireflies between the trees, brighter as night falls',
+      'Stars and a moon appear when darkness comes',
+      'Every tree has its own shade of green now',
+    ],
+  },
+  {
     v: '0.3.0',
     items: [
       'New objective: five effigies wait at marked places — playground, sledding hill, the crossing, the forest path, the east shore',
@@ -370,8 +379,8 @@ function animate() {
   }
 
   notDeer.update(dt, player, world, audio);
-  world.update(dt);
   const p = player.yawObject.position;
+  world.update(dt, p);
   const ground = new THREE.Vector3(p.x, 0, p.z);
   checkTransitions(ground);
   audio.setAmbience(world.windLevel(p.x, p.z), world.riverProximity(p.x, p.z));
