@@ -156,18 +156,20 @@ export class GameAudio {
     const settings = {
       overworld: { freq: 750, gain: 0.12 },
       underground: { freq: 420, gain: 0.16 },
-      chase: { freq: 1000, gain: 0.19 },
+      chase: { freq: 1800, gain: 0.28 },
     }[mode];
     this.musicFilter.frequency.setTargetAtTime(settings.freq, t, 1.5);
     this.musicOut.gain.setTargetAtTime(settings.gain, t, 1.5);
 
     if (mode === 'chase' && !this.pulseTimer) {
       const beat = () => {
-        this.knock({ freq: 75, freqEnd: 38, dur: 0.16, gain: 0.34 });
-        this.knock({ freq: 70, freqEnd: 36, dur: 0.12, gain: 0.22, delay: 0.34 });
+        this.knock({ freq: 85, freqEnd: 40, dur: 0.12, gain: 0.45 });
+        this.knock({ freq: 80, freqEnd: 38, dur: 0.1, gain: 0.3, delay: 0.2 });
+        // Harsh noise on the off-beat for a chaotic feel
+        this.burst({ dur: 0.08, type: 'bandpass', freq: 2200, q: 1.5, gain: 0.25, delay: 0.1 });
       };
       beat();
-      this.pulseTimer = setInterval(beat, 860);
+      this.pulseTimer = setInterval(beat, 400);
     } else if (mode !== 'chase' && this.pulseTimer) {
       clearInterval(this.pulseTimer);
       this.pulseTimer = null;
@@ -346,5 +348,13 @@ export class GameAudio {
     if (!this.started) return;
     this.knock({ freq: 85, freqEnd: 45, dur: 0.12, gain: 0.22 });
     this.footstep(surface, true);
+  }
+
+  gameOver() {
+    if (!this.started) return;
+    // Massive low thud + noise burst
+    this.knock({ freq: 150, freqEnd: 20, dur: 1.5, gain: 0.6 });
+    this.burst({ dur: 0.8, type: 'lowpass', freq: 400, gain: 0.8 });
+    this.setMusicMode('overworld');
   }
 }

@@ -21,7 +21,9 @@ scene.add(player.yawObject);
 const audio = new GameAudio();
 
 const notDeer = new NotDeer();
-notDeer.position.set(80, 0, 15);
+// Spawn at the bottom of the tower: x=500, z=0 is the center, so offset slightly
+const notDeerSpawn = new THREE.Vector3(495, -16, 5);
+notDeer.position.copy(notDeerSpawn);
 scene.add(notDeer);
 player.onStep = (sprinting) => {
   const p = player.yawObject.position;
@@ -36,6 +38,13 @@ player.onLand = () => {
 const fade = document.getElementById('fade');
 let underground = false;
 let teleportCooldown = 0;
+let nightFactor = 0;
+let chaseActive = false;
+
+notDeer.onChaseStarted = () => {
+  chaseActive = true;
+  player.setChaseMode(true);
+};
 
 // --- Pointer lock flow ---
 // ?debug skips the lock so the scene can be inspected/screenshotted headlessly;
@@ -49,7 +58,7 @@ if (debug) {
     const dx = parseFloat(params.get('x') ?? world.spawn.x);
     player.spawnAt(new THREE.Vector3(dx, 0, parseFloat(params.get('z') ?? world.spawn.z)));
     underground = dx > 400;
-    world.setUnderground(underground);
+    world.setNightness(nightFactor, underground);
   }
   if (params.has('ry')) player.yawObject.rotation.y = parseFloat(params.get('ry'));
   if (params.has('rx')) player.pitchObject.rotation.x = parseFloat(params.get('rx'));
@@ -89,7 +98,7 @@ function teleport(position, facing, toUnderground) {
   fade.style.opacity = 1;
   setTimeout(() => {
     underground = toUnderground;
-    world.setUnderground(toUnderground);
+    world.setNightness(nightFactor, toUnderground);
     player.spawnAt(position);
     player.yawObject.rotation.y = facing;
     player.pitchObject.rotation.x = 0;
@@ -120,6 +129,32 @@ function animate() {
   if (document.pointerLockElement || debug) {
     player.update(dt);
   }
+
+  // Handle the chase transition
+  if (chaseActive) {
+    nightFactor = Math.min(1.0, nightFactor + dt * 0.3);
+  }
+  world.setNightness(nightFactor, underground);
+
+  // Game over logic
+  if (chaseActive && notDeer.position.distanceTo(player.yawObject.position) < 1.5 && teleportCooldown <= 0) {
+    teleportCooldown = 2;
+    fade.style.opacity = 1;
+    audio.gameOver();
+    setTimeout(() => {
+      chaseActive = false;
+      nightFactor = 0;
+      player.setChaseMode(false);
+      notDeer.reset(notDeerSpawn);
+      player.spawnAt(world.spawn);
+      player.yawObject.rotation.y = Math.PI / 2;
+      player.pitchObject.rotation.x = 0;
+      player.velocity.set(0, 0, 0);
+      world.setNightness(nightFactor, underground);
+      fade.style.opacity = 0;
+    }, 1200);
+  }
+
   notDeer.update(dt, player, world, audio);
   world.update(dt);
   const p = player.yawObject.position;

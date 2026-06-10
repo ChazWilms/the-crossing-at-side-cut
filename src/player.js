@@ -22,6 +22,31 @@ export class Player {
     this.yawObject = new THREE.Object3D();
     this.yawObject.add(this.pitchObject);
 
+    this.walkSpeed = WALK_SPEED;
+    this.sprintSpeed = SPRINT_SPEED;
+    this.eyeHeight = EYE_HEIGHT;
+    this.chaseActive = false;
+
+    // Hand-held lamp
+    this.lampGroup = new THREE.Group();
+    // Positioned bottom right of view
+    this.lampBasePos = new THREE.Vector3(0.5, -0.6, -0.8);
+    this.lampGroup.position.copy(this.lampBasePos);
+    
+    // Simple box for the lamp
+    const lampMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.15, 0.3, 0.15),
+      new THREE.MeshBasicMaterial({ color: 0xffd080 })
+    );
+    this.lampGroup.add(lampMesh);
+
+    // Light casting around the player
+    this.lampLight = new THREE.PointLight(0xffb060, 2.0, 15);
+    this.lampLight.position.set(0, 0.2, 0);
+    this.lampGroup.add(this.lampLight);
+
+    this.pitchObject.add(this.lampGroup);
+
     this.velocity = new THREE.Vector3();
     this.grounded = false;
     this.stamina = STAMINA_MAX;
@@ -51,7 +76,14 @@ export class Player {
 
   spawnAt(position) {
     this.yawObject.position.copy(position);
-    this.yawObject.position.y = this.getGroundHeight(position.x, position.z) + EYE_HEIGHT;
+    this.yawObject.position.y = this.getGroundHeight(position.x, position.z) + this.eyeHeight;
+  }
+
+  setChaseMode(active) {
+    this.chaseActive = active;
+    this.walkSpeed = active ? WALK_SPEED * 2.0 : WALK_SPEED;
+    this.sprintSpeed = active ? SPRINT_SPEED * 2.0 : SPRINT_SPEED;
+    this.eyeHeight = active ? EYE_HEIGHT + 0.3 : EYE_HEIGHT;
   }
 
   update(dt) {
@@ -81,9 +113,9 @@ export class Player {
     }
 
     // --- Horizontal movement with simple step-based collision ---
-    const speed = sprinting ? SPRINT_SPEED : WALK_SPEED;
+    const speed = sprinting ? this.sprintSpeed : this.walkSpeed;
     const pos = this.yawObject.position;
-    const footY = pos.y - EYE_HEIGHT;
+    const footY = pos.y - this.eyeHeight;
     const step = input.clone().multiplyScalar(speed * dt);
     const nextGround = this.getGroundHeight(pos.x + step.x, pos.z + step.z);
     if (nextGround - footY <= MAX_STEP) {
@@ -99,6 +131,15 @@ export class Player {
       }
     }
 
+    // Wobble the lamp based on movement
+    const wobbleSpeed = sprinting ? 12 : 8;
+    const wobbleAmount = moving && this.grounded ? (sprinting ? 0.08 : 0.04) : 0.01;
+    const t = performance.now() * 0.001 * wobbleSpeed;
+    this.lampGroup.position.y = this.lampBasePos.y + Math.sin(t) * wobbleAmount;
+    this.lampGroup.position.x = this.lampBasePos.x + Math.cos(t * 0.5) * wobbleAmount;
+    this.lampGroup.rotation.z = Math.sin(t * 0.5) * wobbleAmount * 2;
+    this.lampGroup.rotation.x = Math.cos(t) * wobbleAmount;
+
     // --- Gravity, jumping, ground snap ---
     if (this.keys.has('Space') && this.grounded) {
       this.velocity.y = JUMP_VELOCITY;
@@ -108,8 +149,8 @@ export class Player {
     pos.y += this.velocity.y * dt;
 
     const ground = this.getGroundHeight(pos.x, pos.z);
-    if (pos.y - EYE_HEIGHT <= ground) {
-      pos.y = ground + EYE_HEIGHT;
+    if (pos.y - this.eyeHeight <= ground) {
+      pos.y = ground + this.eyeHeight;
       if (!this.grounded && this.velocity.y < -5) this.onLand?.();
       this.velocity.y = 0;
       this.grounded = true;

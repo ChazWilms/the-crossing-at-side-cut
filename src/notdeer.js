@@ -14,6 +14,7 @@ export class NotDeer extends THREE.Group {
     this.encounterTimer = 0;
     this.twitchTimer = 0;
     this.velocity = new THREE.Vector3();
+    this.onChaseStarted = null;
 
     // Lanky, uncanny body
     const mat = lambert({ color: 0x241d18, flatShading: true });
@@ -114,6 +115,7 @@ export class NotDeer extends THREE.Group {
       if (this.encounterTimer > 1.8) {
         this.state = STATE_CHASE;
         audio.setMusicMode('chase');
+        if (this.onChaseStarted) this.onChaseStarted();
       }
     } else if (this.state === STATE_CHASE) {
       // Run toward player
@@ -140,5 +142,14 @@ export class NotDeer extends THREE.Group {
     } else {
       this.position.y = world.getGroundHeight(this.position.x, this.position.z);
     }
+  }
+
+  reset(spawnPoint) {
+    this.state = STATE_IDLE;
+    this.encounterTimer = 0;
+    this.twitchTimer = 0;
+    this.position.copy(spawnPoint);
+    this.rotation.set(0, 0, 0);
+    this.torso.rotation.copy(this.basePositions.torsoRot);
   }
 }

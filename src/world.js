@@ -129,6 +129,7 @@ export class World {
     this.rolling = new ValueNoise(1137);
     this.detail = new ValueNoise(4422);
     this.shore = new ValueNoise(9810);
+    this.torches = [];
   }
 
   // ---------------------------------------------------------------------
@@ -259,15 +260,26 @@ export class World {
     scene.add(this.sun);
   }
 
-  /** Swap between the sunset overworld and the lightless underground. */
-  setUnderground(under) {
-    this.hemi.intensity = under ? 0.26 : 1.5;
-    this.sun.intensity = under ? 0 : 2.0;
-    const color = under ? 0x030303 : 0xc46a47;
-    this.scene.fog.color.set(color);
-    this.scene.background.set(color);
-    this.scene.fog.near = under ? 3 : 25;
-    this.scene.fog.far = under ? 30 : 140;
+  /** Swap between the sunset overworld and the lightless underground, blending in the night fog if active. */
+  setNightness(nightFactor, under) {
+    // Underground overrides nightFactor to fully black
+    const factor = under ? 1.0 : nightFactor;
+    
+    // Light intensity
+    this.hemi.intensity = THREE.MathUtils.lerp(1.5, 0.26, factor);
+    this.sun.intensity = THREE.MathUtils.lerp(2.0, 0, factor);
+
+    // Color transition
+    const sunset = new THREE.Color(0xc46a47);
+    const black = new THREE.Color(0x030303);
+    const color = sunset.lerp(black, factor);
+
+    this.scene.fog.color.copy(color);
+    this.scene.background.copy(color);
+
+    // Fog distance shrinks in the dark
+    this.scene.fog.near = THREE.MathUtils.lerp(25, 3, factor);
+    this.scene.fog.far = THREE.MathUtils.lerp(140, 30, factor);
   }
 
   buildTerrain(scene) {
@@ -944,12 +956,28 @@ export class World {
       DESC.cz + DESC.R0 * Math.sin(enterT)
     );
 
-    // Faint warm lights: top of the shaft, mid-shaft, and the chamber.
-    for (const [y, intensity, distance] of [[1.5, 32, 26], [-7, 28, 26], [DESC.chamberY + 3, 60, 40]]) {
-      const light = new THREE.PointLight(0x8a6644, intensity, distance, 1.6);
-      light.position.set(DESC.cx, y, DESC.cz);
+    // Spooky torches along the walls
+    const torchAngles = [0, Math.PI / 2, Math.PI, Math.PI * 1.5];
+    for (const angle of torchAngles) {
+      const x = DESC.cx + (wallR - 0.2) * Math.cos(angle);
+      const z = DESC.cz + (wallR - 0.2) * Math.sin(angle);
+      const y = DESC.chamberY + 2.5;
+
+      const torchPole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.6, 5), lambert({ color: 0x3d2b1f }));
+      torchPole.position.set(x, y - 0.3, z);
+      scene.add(torchPole);
+
+      const light = new THREE.PointLight(0xff4a10, 40, 28, 1.2);
+      light.position.set(x, y + 0.1, z);
+      light.baseIntensity = 40;
       scene.add(light);
+      this.torches.push(light);
     }
+    
+    // One dim eerie center light
+    const centerLight = new THREE.PointLight(0x401010, 30, 35, 1.5);
+    centerLight.position.set(DESC.cx, DESC.chamberY + 8, DESC.cz);
+    scene.add(centerLight);
   }
 
   /** Walkable ground height at (x, z) — the player controller's only physics query. */
@@ -1029,6 +1057,14 @@ export class World {
     // Slow texture scroll sells the river current.
     for (const mat of this.waterMaterials) {
       if (mat.map) mat.map.offset.x += dt * 0.018;
+    }
+
+    // Flicker torches
+    const time = performance.now() * 0.01;
+    for (let i = 0; i < this.torches.length; i++) {
+      const light = this.torches[i];
+      const flicker = Math.sin(time + i * 2.3) * Math.cos(time * 1.5 + i) * 15;
+      light.intensity = light.baseIntensity + flicker + Math.random() * 5;
     }
   }
 }

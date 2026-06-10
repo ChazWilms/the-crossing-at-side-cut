@@ -37,5 +37,5 @@ Pushes to `main` deploy automatically to GitHub Pages.
 - [x] Sunset river, crossing stones, island forest, footpath, beach, tower exterior
 - [x] Footstep audio per surface, wind/river ambience (all synthesized, `src/audio.js`)
 - [x] The descent: tower doorway to the underground spiral and the chamber
-- [ ] Game manager: exploration -> encounter -> chase, dynamic fog/night transition
-- [ ] The Not-Deer: model, twitch animation, pursuit AI
+- [x] Game manager: exploration -> encounter -> chase, dynamic fog/night transition
+- [x] The Not-Deer: model, twitch animation, pursuit AI
