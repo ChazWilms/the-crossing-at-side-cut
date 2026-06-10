@@ -755,7 +755,7 @@ export class World {
       stone.position.set(x, STONE_TOP_Y - 1.0, z);
       stone.rotation.y = Math.random() * Math.PI;
       scene.add(stone);
-      this.stones.push({ x, z, r });
+      this.stones.push({ x, z, r, mesh: stone });
     }
   }
 
@@ -1251,6 +1251,38 @@ export class World {
     const centerLight = new THREE.PointLight(0x401010, 30, 35, 1.5);
     centerLight.position.set(DESC.cx, DESC.chamberY + 8, DESC.cz);
     scene.add(centerLight);
+
+    // What's left of Dan: a dropped backpack and scattered bones near the
+    // chamber's edge.
+    const packGroup = new THREE.Group();
+    const canvasMat = lambert({ color: 0x3e4a36, roughness: 0.95 });
+    const pack = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.55, 0.22), canvasMat);
+    pack.rotation.z = 1.35; // toppled over
+    pack.position.y = 0.16;
+    packGroup.add(pack);
+    const flap = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.06), canvasMat);
+    flap.position.set(0.25, 0.3, 0);
+    flap.rotation.z = 0.8;
+    packGroup.add(flap);
+    packGroup.position.set(DESC.cx - 3.5, DESC.chamberY + 0.05, DESC.cz - 5);
+    scene.add(packGroup);
+
+    const boneMat = lambert({ color: 0xb8b0a0, roughness: 0.7 });
+    for (let i = 0; i < 9; i++) {
+      const bone = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.035, 0.045, 0.25 + Math.random() * 0.3, 5),
+        boneMat
+      );
+      const a = Math.random() * Math.PI * 2;
+      const d = 1 + Math.random() * 3.5;
+      bone.position.set(
+        DESC.cx - 3.5 + Math.cos(a) * d,
+        DESC.chamberY + 0.1,
+        DESC.cz - 5 + Math.sin(a) * d
+      );
+      bone.rotation.set(Math.PI / 2, Math.random() * Math.PI, Math.random() * 0.4);
+      scene.add(bone);
+    }
   }
 
   /** Walkable ground height at (x, z) — the player controller's only physics query. */
@@ -1327,6 +1359,20 @@ export class World {
   }
 
   update(dt, playerPos) {
+    // Crossing stones tip slightly under the player's weight.
+    if (playerPos) {
+      for (const s of this.stones) {
+        if (!s.mesh) continue;
+        const dx = playerPos.x - s.x;
+        const dz = playerPos.z - s.z;
+        const on = dx * dx + dz * dz < s.r * s.r && Math.abs(playerPos.y - 2) < 2.5;
+        const tx = on ? (dz / s.r) * 0.06 : 0;
+        const tz = on ? (-dx / s.r) * 0.06 : 0;
+        s.mesh.rotation.x += (tx - s.mesh.rotation.x) * Math.min(1, dt * 6);
+        s.mesh.rotation.z += (tz - s.mesh.rotation.z) * Math.min(1, dt * 6);
+      }
+    }
+
     // Mist cards drift east and always face the player.
     if (this.mist) {
       this.mistTime = (this.mistTime ?? 0) + dt;

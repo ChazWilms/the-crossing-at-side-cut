@@ -24,6 +24,11 @@ const NOTES = [
     z: 52,
     text: 'Journal, p.3 — It is not a deer. The door under the tower was open when we got here. Dan went down. I am going down after him.',
   },
+  {
+    x: 497,
+    z: -5,
+    text: "Journal, p.4 — Found Dan's pack at the bottom. The thing in the dark walks like him now. If you read this: take the stones home and DO NOT look back.",
+  },
 ];
 
 export class Notes {

@@ -25,6 +25,13 @@ composer.addPass(bloomPass);
 // --- Version log shown on the menu screen ---
 const CHANGELOG = [
   {
+    v: '1.1.0',
+    items: [
+      "Dan's backpack and what's left of him wait at the bottom of the pit, with the final journal page",
+      'The crossing stones tip under your weight',
+    ],
+  },
+  {
     v: '1.0.0',
     items: [
       'The full loop is here: cross at dusk, find the five effigies, open the tower, take what waits below, and outrun it home',
