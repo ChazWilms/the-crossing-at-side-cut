@@ -304,9 +304,10 @@ export class World {
 
   buildTerrain(scene) {
     // One displaced, flat-shaded heightfield instead of flat planes.
-    const geo = new THREE.PlaneGeometry(560, 330, 200, 120);
+    // Expanded to 800x400 and translated to cover the tower at X=340
+    const geo = new THREE.PlaneGeometry(800, 400, 300, 150);
     geo.rotateX(-Math.PI / 2);
-    geo.translate(0, 0, 5);
+    geo.translate(150, 0, -30);
 
     const pos = geo.attributes.position;
     const colors = new Float32Array(pos.count * 3);
@@ -350,9 +351,9 @@ export class World {
     // Water sheet over the carved riverbed.
     const waterMat = lambert({ map: tex.waterTexture(80), color: 0xffff00 });
     this.waterMaterials.push(waterMat);
-    const water = new THREE.Mesh(new THREE.PlaneGeometry(560, 220, 56, 22), waterMat);
+    const water = new THREE.Mesh(new THREE.PlaneGeometry(800, 220, 80, 22), waterMat);
     water.rotation.x = -Math.PI / 2;
-    water.position.set(0, WATER_Y, 45);
+    water.position.set(150, WATER_Y, 45);
     scene.add(water);
   }
 
