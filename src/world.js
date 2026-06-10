@@ -363,16 +363,18 @@ export class World {
     this.sun.position.set(-80, 30, -30); // low in the west
     
     // Enable HD shadows for the sun over the entire map
+    // Tight frustum + big map = crisp console-era shadows over the
+    // playable area instead of a blurry smear over a half-kilometer.
     this.sun.castShadow = true;
-    this.sun.shadow.camera.left = -500;
-    this.sun.shadow.camera.right = 500;
-    this.sun.shadow.camera.top = 500;
-    this.sun.shadow.camera.bottom = -500;
+    this.sun.shadow.camera.left = -300;
+    this.sun.shadow.camera.right = 300;
+    this.sun.shadow.camera.top = 220;
+    this.sun.shadow.camera.bottom = -220;
     this.sun.shadow.camera.near = 0.5;
-    this.sun.shadow.camera.far = 1000;
-    this.sun.shadow.bias = -0.001;
-    this.sun.shadow.mapSize.width = 2048;
-    this.sun.shadow.mapSize.height = 2048;
+    this.sun.shadow.camera.far = 700;
+    this.sun.shadow.bias = -0.0008;
+    this.sun.shadow.mapSize.width = 4096;
+    this.sun.shadow.mapSize.height = 4096;
 
     scene.add(this.sun);
   }
@@ -921,7 +923,7 @@ export class World {
       for (let c = 0; c < tiers; c++) {
         const f = c / tiers;
         const r = (2.6 - f * 1.7) * (0.85 + Math.random() * 0.4);
-        const cone = new THREE.ConeGeometry(r, 3.2 - f, 6);
+        const cone = new THREE.ConeGeometry(r, 3.2 - f, 9);
         jitterGeometry(cone, r * 0.22);
         cone.translate(
           lean * (1 + f) + (Math.random() - 0.5) * 0.5,
@@ -945,7 +947,7 @@ export class World {
 
       const blobs = 2 + Math.floor(Math.random() * 3);
       for (let b = 0; b < blobs; b++) {
-        const blob = new THREE.IcosahedronGeometry(1.4 + Math.random() * 1.1, 0);
+        const blob = new THREE.IcosahedronGeometry(1.4 + Math.random() * 1.1, 1);
         blob.scale(1 + Math.random() * 0.6, 0.7 + Math.random() * 0.4, 1 + Math.random() * 0.6);
         jitterGeometry(blob, 0.3);
         blob.translate(

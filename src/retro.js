@@ -26,6 +26,11 @@ export class RetroRenderer {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
+    // Filmic response curve — the single biggest step away from the flat
+    // "WebGL demo" look toward console-era color.
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.15;
+
     canvasParent.appendChild(this.renderer.domElement);
 
     window.addEventListener('resize', () => {

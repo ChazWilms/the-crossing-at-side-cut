@@ -78,23 +78,42 @@ export class NotDeer extends THREE.Group {
       }
     });
 
-    // Normalize size from the model's own bounds, then stretch it wrong:
-    // too tall, too narrow — proportions that read as deer-but-not.
+    // Normalize size from the model's own bounds. The body runs along the
+    // native Z axis (raw bounds ~105 x 302 x 721).
     const box = new THREE.Box3().setFromObject(model);
     const size = box.getSize(new THREE.Vector3());
     const s = 2.1 / size.y;
-    model.scale.set(s * 0.85, s * 1.4, s * 1.05);
-    model.position.y = -box.min.y * s * 1.4;
-    // The horse natively faces +x; the movement code steers with
-    // rotation.y = atan2(dx, dz), which assumes +z forward.
-    model.rotation.y = -Math.PI / 2;
+    // A touch too tall and narrow — deer-but-not, without mangling the
+    // morph animation.
+    model.scale.set(s * 0.92, s * 1.22, s);
+    model.position.y = -box.min.y * s * 1.22;
+
+    // Which end is the head? The head/neck own the tallest vertices, so the
+    // average z-sign of the top quarter of the mesh points at the face.
+    let headSign = 1;
+    model.traverse((o) => {
+      if (o.isMesh && o.geometry?.attributes?.position) {
+        const p = o.geometry.attributes.position;
+        const yCut = box.min.y + size.y * 0.75;
+        let zSum = 0;
+        let n = 0;
+        for (let i = 0; i < p.count; i += 7) {
+          if (p.getY(i) > yCut) {
+            zSum += p.getZ(i);
+            n++;
+          }
+        }
+        if (n > 0) headSign = Math.sign(zSum / n) || 1;
+      }
+    });
+    // Movement steers with rotation.y = atan2(dx, dz): forward must be +z.
+    model.rotation.y = headSign > 0 ? 0 : Math.PI;
     inner.add(model);
 
-    // Head rig: glowing forward-facing eyes and twisted antlers, parented
-    // near where the stretched head lives.
-    // Seated into the neck at the front, not floating above the back.
-    const headY = size.y * s * 1.4 * 0.78;
-    const headZ = size.x * s * 1.05 * 0.38; // model length runs along its native x
+    // Head rig: glowing eyes, RED NOSE, and twisted antlers seated at the
+    // face end of the body.
+    const headY = size.y * s * 1.22 * 0.86;
+    const headZ = size.z * s * 0.44;
     const headRig = new THREE.Group();
     headRig.position.set(0, headY, headZ);
     const eyeGeo = new THREE.SphereGeometry(0.06, 8, 8);
@@ -104,8 +123,15 @@ export class NotDeer extends THREE.Group {
       eye.position.set(ex, 0, 0.18);
       headRig.add(eye);
     }
-    const glow = new THREE.PointLight(0xff2200, 3, 5, 1.8);
-    glow.position.set(0, 0, 0.25);
+    // The nose: a bright red coal at the tip of the snout.
+    const nose = new THREE.Mesh(
+      new THREE.SphereGeometry(0.075, 10, 10),
+      new THREE.MeshStandardMaterial({ color: 0xff1a00, emissive: 0xff1500, emissiveIntensity: 6 })
+    );
+    nose.position.set(0, -0.14, 0.38);
+    headRig.add(nose);
+    const glow = new THREE.PointLight(0xff2200, 5, 6, 1.8);
+    glow.position.set(0, -0.1, 0.35);
     headRig.add(glow);
 
     const antlerMat = lambert({ map: tex.barkTexture(2), color: 0x2a2120 });
@@ -135,6 +161,11 @@ export class NotDeer extends THREE.Group {
       this.runAction = this.mixer.clipAction(gltf.animations[0]);
       this.runAction.play();
     }
+    console.log(
+      'HORSE LOADED anims:',
+      gltf.animations.map((a) => `${a.name}(${a.duration.toFixed(2)}s)`).join(','),
+      'size:', size.x.toFixed(2), size.y.toFixed(2), size.z.toFixed(2)
+    );
   }
 
   update(dt, player, world, audio) {
@@ -168,6 +199,8 @@ export class NotDeer extends THREE.Group {
       this.mixer.update(dt * this.animRate);
     } else if (this.mixer && this.state === STATE_ENCOUNTER) {
       this.mixer.update(dt * 0.15); // slow, wrong, waking up
+    } else if (this.mixer) {
+      this.mixer.update(dt * 0.05); // never frozen — it breathes
     }
 
     if (this.state === STATE_IDLE) {
@@ -201,18 +234,27 @@ export class NotDeer extends THREE.Group {
         if (this.onChaseStarted) this.onChaseStarted();
       }
     } else if (this.state === STATE_CHASE) {
-      // Lurching pursuit: ground speed tied to the stuttering animation.
+      // Lurching pursuit: ground speed tied to the stuttering animation,
+      // movement blocked by walls/ledges so it follows the ramp and the
+      // terrain instead of warping over them.
       const speed = 7.2 * (this.mixer ? 0.45 + this.animRate * 0.55 : 1);
       const dir = new THREE.Vector3(pPos.x - this.position.x, 0, pPos.z - this.position.z);
       if (dir.lengthSq() > 1.5 * 1.5) {
-        dir.normalize();
-        this.position.x += dir.x * speed * dt;
-        this.position.z += dir.z * speed * dt;
-        this.rotation.y = Math.atan2(dir.x, dir.z);
+        const baseAng = Math.atan2(dir.x, dir.z);
+        for (const off of [0, 0.55, -0.55, 1.1, -1.1]) {
+          const a = baseAng + off;
+          const nx = this.position.x + Math.sin(a) * speed * dt;
+          const nz = this.position.z + Math.cos(a) * speed * dt;
+          const ny = world.getGroundHeight(nx, nz);
+          if (Math.abs(ny - this.position.y) < 1.6) {
+            this.position.set(nx, ny, nz);
+            this.rotation.y = a;
+            break;
+          }
+        }
       }
       // Ragged screeches as it closes in.
       if (Math.random() < dt * 0.12 && dist < 45) audio.creatureCry();
-      this.position.y = world.getGroundHeight(this.position.x, this.position.z);
     } else {
       this.position.y = world.getGroundHeight(this.position.x, this.position.z);
     }

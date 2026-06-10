@@ -9,21 +9,34 @@ import { GameAudio } from './audio.js';
 import { NotDeer } from './notdeer.js';
 import { Effigies } from './effigies.js';
 import { Notes } from './notes.js';
+import * as tex from './textures.js';
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, RENDER_WIDTH / RENDER_HEIGHT, 0.1, 200);
 
 const retro = new RetroRenderer();
 
-// Post-Processing Pipeline
+// Post-Processing Pipeline (MSAA render targets so edges stay clean
+// even though the composer bypasses the canvas's built-in antialiasing).
 const composer = new EffectComposer(retro.renderer);
+composer.renderTarget1.samples = 4;
+composer.renderTarget2.samples = 4;
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
-const bloomPass = new UnrealBloomPass(new THREE.Vector2(RENDER_WIDTH, RENDER_HEIGHT), 0.45, 0.5, 0.82);
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(RENDER_WIDTH, RENDER_HEIGHT), 0.4, 0.5, 0.85);
 composer.addPass(bloomPass);
 
 // --- Version log shown on the menu screen ---
 const CHANGELOG = [
+  {
+    v: '1.3.0',
+    items: [
+      'GRAPHICS: all-new 256px detail textures (grass blades, pebbled dirt, river stones, strata, bark, asphalt cracks) with smooth anisotropic filtering',
+      'GRAPHICS: filmic ACES color, MSAA edges, sky reflections on water and the car, 4096px crisp sun shadows, denser tree geometry',
+      'Not-Deer fixed: it was running sideways (wrong model axis) — now faces and follows you properly, including up the spiral ramp',
+      'The Not-Deer has its burning red nose',
+    ],
+  },
   {
     v: '1.2.0',
     items: [
@@ -134,6 +147,17 @@ if (logEl) {
 
 const world = new World();
 world.build(scene);
+
+// Texture sharpness at oblique angles + soft sky reflections on water,
+// car paint, and wet stone.
+tex.applyAnisotropy(retro.renderer.capabilities.getMaxAnisotropy());
+{
+  const pmrem = new THREE.PMREMGenerator(retro.renderer);
+  const envScene = new THREE.Scene();
+  envScene.add(world.skyMesh.clone());
+  scene.environment = pmrem.fromScene(envScene, 0.04).texture;
+  if ('environmentIntensity' in scene) scene.environmentIntensity = 0.35;
+}
 
 const player = new Player(camera, (x, z) => world.getGroundHeight(x, z));
 player.spawnAt(world.spawn);
@@ -327,6 +351,18 @@ if (debug) {
   }
   if (params.has('ry')) player.yawObject.rotation.y = parseFloat(params.get('ry'));
   if (params.has('rx')) player.pitchObject.rotation.x = parseFloat(params.get('rx'));
+  // &deertest force-triggers the encounter and logs the creature's state.
+  if (params.has('deertest')) {
+    setTimeout(() => notDeer.triggerEncounter(audio), 2500);
+    setInterval(() => {
+      console.log(
+        'DEERTEST state', notDeer.state,
+        'pos', notDeer.position.x.toFixed(1), notDeer.position.y.toFixed(1), notDeer.position.z.toFixed(1),
+        'mixer', !!notDeer.mixer, 'rate', notDeer.animRate?.toFixed(2),
+        'playerdist', notDeer.position.distanceTo(player.yawObject.position).toFixed(1)
+      );
+    }, 1000);
+  }
   // &audiotest exercises every footstep variant (needs relaxed autoplay).
   if (params.has('audiotest')) {
     audio.start();
