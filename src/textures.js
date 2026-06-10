@@ -10,8 +10,11 @@ function makeCanvasTexture(draw, repeat = 1) {
   canvas.height = SIZE;
   draw(canvas.getContext('2d'));
   const tex = new THREE.CanvasTexture(canvas);
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
+  tex.magFilter = THREE.NearestFilter; // chunky up close
+  // Mipmapped minification: without it every textured surface shimmers
+  // and crawls as the camera moves, which reads as "shifting pixels".
+  tex.minFilter = THREE.NearestMipmapLinearFilter;
+  tex.generateMipmaps = true;
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(repeat, repeat);

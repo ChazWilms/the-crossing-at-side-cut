@@ -6,9 +6,9 @@ import * as THREE from 'three';
 export const RENDER_WIDTH = 640;
 export const RENDER_HEIGHT = 480;
 
-// Vertex positions snap to a grid at half the render resolution, which is
-// what produces the characteristic PSX polygon jitter as things move.
-const SNAP = new THREE.Vector2(RENDER_WIDTH / 2, RENDER_HEIGHT / 2);
+// Vertex positions snap to the render-resolution grid — a hint of PSX
+// polygon jitter without the distracting wobble of a coarser grid.
+const SNAP = new THREE.Vector2(RENDER_WIDTH, RENDER_HEIGHT);
 
 /**
  * Patches a built-in Three.js material with the two PSX-era quirks:

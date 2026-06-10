@@ -56,6 +56,76 @@ export class GameAudio {
 
     this.windTarget = 0.09;
     this.riverTarget = 0;
+
+    this.startMusic();
+  }
+
+  // Generative score: slow dark chord pads crossfading into each other,
+  // with a sparse, lonely bell note now and then. Synthesized like
+  // everything else — no audio files.
+  startMusic() {
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    out.gain.value = 0.055;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 750;
+    filter.connect(out);
+    out.connect(this.master);
+
+    // A natural-minor wander that never resolves.
+    const CHORDS = [
+      [55.0, 82.41, 110.0, 130.81], // Am
+      [43.65, 65.41, 87.31, 130.81], // F
+      [49.0, 73.42, 98.0, 123.47], // G
+      [41.2, 61.74, 82.41, 123.47], // Em over E
+    ];
+    const HOLD = 16; // chord length (s)
+    const STEP = 12; // next chord starts 4s before this one fades out
+
+    let idx = 0;
+    const playChord = (freqs) => {
+      const t = ctx.currentTime + 0.05;
+      for (const f of freqs) {
+        for (const detune of [-5, 4]) {
+          const osc = ctx.createOscillator();
+          osc.type = 'triangle';
+          osc.frequency.value = f;
+          osc.detune.value = detune;
+          const g = ctx.createGain();
+          g.gain.setValueAtTime(0, t);
+          g.gain.linearRampToValueAtTime(0.28, t + 4.5);
+          g.gain.setValueAtTime(0.28, t + HOLD - 5);
+          g.gain.linearRampToValueAtTime(0, t + HOLD);
+          osc.connect(g).connect(filter);
+          osc.start(t);
+          osc.stop(t + HOLD + 0.2);
+        }
+      }
+    };
+    playChord(CHORDS[0]);
+    setInterval(() => {
+      idx = (idx + 1) % CHORDS.length;
+      playChord(CHORDS[idx]);
+    }, STEP * 1000);
+
+    // The bell: a quiet high note at irregular, long intervals.
+    const NOTES = [220, 246.94, 261.63, 329.63, 392.0];
+    const bell = () => {
+      const t = ctx.currentTime + 0.05;
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = NOTES[Math.floor(Math.random() * NOTES.length)] * (Math.random() < 0.35 ? 0.5 : 1);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.5, t + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 4.5);
+      osc.connect(g).connect(filter);
+      osc.start(t);
+      osc.stop(t + 4.7);
+      setTimeout(bell, 9000 + Math.random() * 14000);
+    };
+    setTimeout(bell, 7000);
   }
 
   makeNoiseBuffer(seconds) {

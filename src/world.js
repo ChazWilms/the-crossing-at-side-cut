@@ -677,12 +677,12 @@ export class World {
     const island = bands.blue_grass_island;
     let placed = 0;
     let attempts = 0;
-    while (placed < 230 && attempts < 4000) {
+    while (placed < 580 && attempts < 15000) {
       attempts++;
       const x = THREE.MathUtils.lerp(island.x[0] + 3, island.x[1] - 3, Math.random());
       const z = THREE.MathUtils.lerp(island.z[0] + 3, island.z[1] - 3, Math.random());
-      if (World.distanceToPoints(this.pathPoints, x, z) < 3.2) continue;
-      if (this.towerPosition.distanceTo(new THREE.Vector3(x, 0, z)) < 14) continue;
+      if (World.distanceToPoints(this.pathPoints, x, z) < 2.8) continue;
+      if (this.towerPosition.distanceTo(new THREE.Vector3(x, 0, z)) < 12) continue;
       if (this.heightAt(x, z) < -0.4) continue;
       Math.random() < 0.65 ? addPine(x, z) : addOak(x, z);
       placed++;
@@ -691,7 +691,7 @@ export class World {
     // Sparse parkland trees on the north bank — mostly broad oaks.
     let bankPlaced = 0;
     let bankAttempts = 0;
-    while (bankPlaced < 36 && bankAttempts < 1500) {
+    while (bankPlaced < 52 && bankAttempts < 2500) {
       bankAttempts++;
       const x = THREE.MathUtils.lerp(-250, 250, Math.random());
       const z = THREE.MathUtils.lerp(-145, -58, Math.random());
