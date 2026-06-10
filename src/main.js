@@ -36,6 +36,16 @@ const notDeerSpawn = new THREE.Vector3(495, -16, 5);
 notDeer.position.copy(notDeerSpawn);
 scene.add(notDeer);
 
+// Cursed Artifact
+const artifact = new THREE.Mesh(
+  new THREE.DodecahedronGeometry(0.3),
+  new THREE.MeshStandardMaterial({ color: 0x88ff88, emissive: 0x22ff22, emissiveIntensity: 1.5, wireframe: true })
+);
+const artifactLight = new THREE.PointLight(0x44ff44, 2.0, 10);
+artifact.add(artifactLight);
+artifact.position.copy(notDeerSpawn).add(new THREE.Vector3(-3, 1, 3));
+scene.add(artifact);
+
 // Fuel Cans
 const fuelCans = [];
 const canGeo = new THREE.BoxGeometry(0.3, 0.4, 0.2);
@@ -191,23 +201,64 @@ function animate() {
   }
   world.setNightness(nightFactor, underground);
 
-  // Game over logic
-  if (chaseActive && notDeer.position.distanceTo(player.yawObject.position) < 1.5 && teleportCooldown <= 0) {
-    teleportCooldown = 2;
+  // Artifact logic
+  if (artifact.parent) {
+    artifact.rotation.y += dt;
+    artifact.rotation.z += dt * 0.5;
+    artifact.position.y = notDeerSpawn.y + 1 + Math.sin(clock.elapsedTime * 2) * 0.2;
+    if (artifact.position.distanceTo(player.yawObject.position) < 2.5) {
+      scene.remove(artifact);
+      notDeer.triggerEncounter(audio);
+    }
+  }
+
+  // Win condition: reach the car
+  const pPos = player.yawObject.position;
+  if (chaseActive && pPos.x < 30 && pPos.z < -100) {
+    chaseActive = false;
+    nightFactor = 0;
+    player.setChaseMode(false);
+    notDeer.reset(notDeerSpawn);
+    world.setNightness(nightFactor, underground);
+    
+    // Quick win flash
+    fade.style.backgroundColor = 'white';
     fade.style.opacity = 1;
-    audio.gameOver();
+    setTimeout(() => {
+      fade.style.backgroundColor = 'black';
+      fade.style.opacity = 0;
+    }, 2000);
+  }
+
+  // Game over logic (Jumpscare)
+  if (chaseActive && notDeer.position.distanceTo(pPos) < 1.6 && teleportCooldown <= 0) {
+    teleportCooldown = 3;
+    player.disabled = true;
+    player.forceLookAt(notDeer.position);
+    audio.creatureScream();
+    
+    setTimeout(() => {
+      fade.style.opacity = 1;
+      audio.gameOver();
+    }, 800);
+    
     setTimeout(() => {
       chaseActive = false;
       nightFactor = 0;
       player.setChaseMode(false);
+      player.disabled = false;
       notDeer.reset(notDeerSpawn);
+      
+      // Reset artifact
+      if (!artifact.parent) scene.add(artifact);
+      
       player.spawnAt(world.spawn);
       player.yawObject.rotation.y = Math.PI / 2;
       player.pitchObject.rotation.x = 0;
       player.velocity.set(0, 0, 0);
       world.setNightness(nightFactor, underground);
       fade.style.opacity = 0;
-    }, 1200);
+    }, 3000);
   }
 
   notDeer.update(dt, player, world, audio);

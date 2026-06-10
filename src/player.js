@@ -67,7 +67,7 @@ export class Player {
     document.addEventListener('keydown', (e) => this.keys.add(e.code));
     document.addEventListener('keyup', (e) => this.keys.delete(e.code));
     document.addEventListener('mousemove', (e) => {
-      if (document.pointerLockElement) {
+      if (document.pointerLockElement && !this.disabled) {
         this.yawObject.rotation.y -= e.movementX * 0.0022;
         this.pitchObject.rotation.x = THREE.MathUtils.clamp(
           this.pitchObject.rotation.x - e.movementY * 0.0022,
@@ -76,6 +76,18 @@ export class Player {
         );
       }
     });
+  }
+
+  forceLookAt(targetPosition) {
+    // Flatten target position to only turn yaw
+    const dx = targetPosition.x - this.yawObject.position.x;
+    const dz = targetPosition.z - this.yawObject.position.z;
+    this.yawObject.rotation.y = Math.atan2(dx, dz);
+    
+    // Pitch up slightly to look at face
+    const dy = (targetPosition.y + 1.2) - this.pitchObject.position.y;
+    const dist = Math.sqrt(dx*dx + dz*dz);
+    this.pitchObject.rotation.x = -Math.atan2(dy, dist);
   }
 
   spawnAt(position) {
@@ -97,6 +109,8 @@ export class Player {
       0,
       (this.keys.has('KeyS') ? 1 : 0) - (this.keys.has('KeyW') ? 1 : 0)
     );
+    if (this.disabled) input.set(0, 0, 0);
+
     const moving = input.lengthSq() > 0;
     if (moving) input.normalize().applyQuaternion(this.yawObject.quaternion);
 

@@ -97,12 +97,6 @@ export class NotDeer extends THREE.Group {
       // Look at player loosely
       const targetAngle = Math.atan2(pPos.x - this.position.x, pPos.z - this.position.z);
       this.rotation.y += (targetAngle - this.rotation.y) * dt * 2;
-
-      if (dist < 22) {
-        this.state = STATE_ENCOUNTER;
-        this.encounterTimer = 0;
-        audio.creatureScream();
-      }
     } else if (this.state === STATE_ENCOUNTER) {
       this.encounterTimer += dt;
       // Stand up and scream phase
@@ -151,5 +145,13 @@ export class NotDeer extends THREE.Group {
     this.position.copy(spawnPoint);
     this.rotation.set(0, 0, 0);
     this.torso.rotation.copy(this.basePositions.torsoRot);
+  }
+
+  triggerEncounter(audio) {
+    if (this.state === STATE_IDLE) {
+      this.state = STATE_ENCOUNTER;
+      this.encounterTimer = 0;
+      audio.creatureScream();
+    }
   }
 }
