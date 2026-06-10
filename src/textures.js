@@ -187,6 +187,31 @@ export function barkTexture(repeat) {
   }, repeat);
 }
 
+// Pale mottled sycamore bark — the floodplain signature tree.
+export function sycamoreBarkTexture(repeat) {
+  return makeTex(128, (ctx, S) => {
+    ctx.fillStyle = '#c6bfae';
+    ctx.fillRect(0, 0, S, S);
+    blotches(ctx, S, ['170,160,140', '214,208,192', '188,180,162'], 18, 14, 40, 0.5);
+    // Dark peeling patches.
+    for (let i = 0; i < 26; i++) {
+      const shade = 90 + Math.floor(Math.random() * 50);
+      ctx.fillStyle = `rgba(${shade},${shade - 8},${shade - 22},0.75)`;
+      ctx.beginPath();
+      ctx.ellipse(
+        Math.random() * S,
+        Math.random() * S,
+        3 + Math.random() * 7,
+        6 + Math.random() * 14,
+        (Math.random() - 0.5) * 0.5,
+        0,
+        7
+      );
+      ctx.fill();
+    }
+  }, repeat);
+}
+
 export function waterTexture(repeat) {
   return makeTex(256, (ctx, S) => {
     ctx.fillStyle = '#41586a';

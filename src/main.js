@@ -29,6 +29,23 @@ composer.addPass(bloomPass);
 // --- Version log shown on the menu screen ---
 const CHANGELOG = [
   {
+    v: '1.8.0',
+    items: [
+      'CLASSIC FINALE: this build is preserved — the full redesign begins after it',
+      'Trails now sit perfectly flat on the ground (mesh-accurate draping)',
+      'Blue Grass Island reshaped into a true lens with the river wrapping both tips; bigger landforms',
+      'Playground rebuilt as one coherent assembly: ladder, attached slide with rails, A-frames that meet the bar, mulch pad',
+    ],
+  },
+  {
+    v: '1.7.0',
+    items: [
+      'Sycamores with pale peeling bark line the banks — the real floodplain tree',
+      'Bigger playground: climbing dome and seesaw',
+      'Metropark wayfinding bollards along both trails; a second car on River Road',
+    ],
+  },
+  {
     v: '1.6.0',
     items: [
       'GRAPHICS: rocks, stones, and timber regain organic irregular shapes (smooth-shaded displacement)',

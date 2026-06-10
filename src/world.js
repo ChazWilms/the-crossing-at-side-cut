@@ -142,9 +142,12 @@ export class World {
   heightAt(x, z) {
     if (x > 400) return this.descentHeight(x, z);
 
-    // Rolling parkland base.
+    // Rolling parkland base with a longer landform wave underneath.
     const detailNoise = this.detail.noise2(x * 0.085, z * 0.085) * 0.3;
-    let h = this.rolling.noise2(x * 0.022, z * 0.022) * 1.1 + detailNoise;
+    let h =
+      this.rolling.noise2(x * 0.022, z * 0.022) * 1.1 +
+      this.rolling.noise2(x * 0.011 + 31, z * 0.011) * 1.5 +
+      detailNoise;
     h = Math.max(h, -0.45);
 
     // Wagener Sledding Hill rises out of the north bank.
@@ -163,15 +166,20 @@ export class World {
     carve(bands.river_north_channel.z[0], bands.river_north_channel.z[1]);
     carve(bands.river_south_channel.z[0], bands.river_south_channel.z[1]);
 
-    // The island mounds up gently between the channels.
-    const island = bands.blue_grass_island;
-    const ipen = Math.min(
-      z - (bands.river_north_channel.z[1] + wobbleB),
-      bands.river_south_channel.z[0] + wobbleA - z,
-      x - island.x[0],
-      island.x[1] - x
-    );
-    h += smoothstep(0, 20, ipen) * 0.7;
+    // The island is a lens shape between the channels — a noisy-edged
+    // ellipse with the river wrapping both tips, like the real Blue Grass.
+    const midN = bands.river_north_channel.z[1] + wobbleB;
+    const midS = bands.river_south_channel.z[0] + wobbleA;
+    if (z > midN - 8 && z < midS + 8) {
+      const e =
+        ((x + 12) / 172) ** 2 +
+        ((z - 45) / 64) ** 2 +
+        this.shore.noise2(x * 0.025, z * 0.025) * 0.09;
+      const islandS = smoothstep(1.08, 0.84, e);
+      const bed = -1.75 + this.detail.noise2(x * 0.1, z * 0.1) * 0.25;
+      const mound = smoothstep(0.84, 0.3, e) * 0.95;
+      h = THREE.MathUtils.lerp(bed, Math.max(h, -0.3) + mound, islandS);
+    }
 
     // Shallows where the crossing stones sit — wadeable, not drownable.
     if (x > -114 && x < -86 && z > -56 && z < -4) h = Math.max(h, -1.2);
@@ -198,6 +206,29 @@ export class World {
     h = THREE.MathUtils.lerp(h, 0.15, 1 - smoothstep(16, 30, td));
 
     return h;
+  }
+
+  // Height of the *rendered* terrain mesh (bilinear over its vertex grid) —
+  // decals glued with this sit flat on the ground instead of floating on a
+  // safety margin above the analytic field.
+  meshHeightAt(x, z) {
+    const x0 = 150 - 400;
+    const z0 = -30 - 200;
+    const cx = 800 / 300;
+    const cz = 400 / 150;
+    const gx = (x - x0) / cx;
+    const gz = (z - z0) / cz;
+    const ix = Math.floor(gx);
+    const iz = Math.floor(gz);
+    const fx = gx - ix;
+    const fz = gz - iz;
+    const X = x0 + ix * cx;
+    const Z = z0 + iz * cz;
+    const h00 = this.heightAt(X, Z);
+    const h10 = this.heightAt(X + cx, Z);
+    const h01 = this.heightAt(X, Z + cz);
+    const h11 = this.heightAt(X + cx, Z + cz);
+    return h00 * (1 - fx) * (1 - fz) + h10 * fx * (1 - fz) + h01 * (1 - fx) * fz + h11 * fx * fz;
   }
 
   descentHeight(x, z) {
@@ -571,6 +602,9 @@ export class World {
     this.buildParkProps(scene);
     this.buildRoad(scene);
     this.buildCanalLocks(scene);
+    this.buildBollards(scene);
+    // A second car, parked on the River Road shoulder.
+    this.buildCar(scene, -40, -126, 1.62, 0x6a4a44);
   }
 
   // W River Road: runs along the north side of the park, dividing the
@@ -724,11 +758,11 @@ export class World {
     scene.add(g);
   }
 
-  buildCar(scene, x, z, rotY) {
+  buildCar(scene, x, z, rotY, color = 0xb0a487) {
     const car = new THREE.Group();
     // Paint with a sheen, glass with a near-mirror finish — the env map
     // gives both real reflections.
-    const bodyMat = lambert({ color: 0xb0a487, metalness: 0.55, roughness: 0.35 });
+    const bodyMat = lambert({ color, metalness: 0.55, roughness: 0.35 });
     const glassMat = lambert({ color: 0x2e3a40, metalness: 0.8, roughness: 0.12 });
     const wheelMat = lambert({ color: 0x1d1d1f, roughness: 0.9 });
 
@@ -779,60 +813,152 @@ export class World {
   }
 
   buildPlayground(scene, x, z) {
-    // Painted metal and plastic — smoother than wood and stone.
+    // One coherent assembly in a local group — every piece meets the piece
+    // it belongs to instead of hovering near it.
+    const pg = new THREE.Group();
     const frameMat = lambert({ color: 0x4a6a8a, metalness: 0.4, roughness: 0.45 });
     const accentMat = lambert({ color: 0x9e4436, roughness: 0.5 });
     const slideMat = lambert({ color: 0xc9a832, roughness: 0.35, metalness: 0.2 });
-    const darkMat = lambert({ color: 0x26262a, roughness: 0.85 }); // rubber
+    const darkMat = lambert({ color: 0x26262a, roughness: 0.85 });
 
-    // Platform tower with a pyramid roof.
+    // Mulch pad under everything.
+    const pad = new THREE.Mesh(new THREE.CircleGeometry(7.5, 22), lambert({ map: tex.dirtTexture(4), color: 0x9a8568 }));
+    pad.rotation.x = -Math.PI / 2;
+    pad.position.y = 0.05;
+    pg.add(pad);
+
+    // Deck tower: posts, platform, pyramid roof.
     for (const px of [-1.1, 1.1]) {
       for (const pz of [-1.1, 1.1]) {
-        const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.6, 0.18), frameMat);
-        post.position.set(x + px, 1.3, z + pz);
-        scene.add(post);
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.7, 0.16), frameMat);
+        post.position.set(px, 1.35, pz);
+        pg.add(post);
       }
     }
-    const platform = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.18, 2.8), accentMat);
-    platform.position.set(x, 1.25, z);
-    scene.add(platform);
-    const roof = new THREE.Mesh(
-      jitterGeometry(new THREE.ConeGeometry(2.1, 1.3, 4), 0.1),
-      lambert({ color: 0x9e4436, flatShading: true })
-    );
+    const platform = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.14, 2.5), accentMat);
+    platform.position.y = 1.22;
+    pg.add(platform);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(2.0, 1.2, 4), accentMat);
     roof.rotation.y = Math.PI / 4;
-    roof.position.set(x, 3.2, z);
-    scene.add(roof);
+    roof.position.y = 3.25;
+    pg.add(roof);
 
-    // Slide running off the south side of the platform.
-    const slide = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.12, 3.4), slideMat);
-    slide.position.set(x, 0.68, z + 2.5);
-    slide.rotation.x = 0.42;
-    scene.add(slide);
+    // Ladder up the north side: stringers + rungs reaching the deck.
+    for (const lx of [-0.35, 0.35]) {
+      const stringer = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.85, 0.07), frameMat);
+      stringer.position.set(lx, 0.95, -1.45);
+      stringer.rotation.x = 0.18;
+      pg.add(stringer);
+    }
+    for (let r = 0; r < 4; r++) {
+      const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.7, 6), darkMat);
+      rung.rotation.z = Math.PI / 2;
+      rung.position.set(0, 0.35 + r * 0.38, -1.56 + r * 0.07);
+      pg.add(rung);
+    }
 
-    // Swing set: A-frame legs, top bar, two swings.
-    const sx = x - 5.5;
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.15, 0.15), frameMat);
-    bar.position.set(sx, 2.3, z);
-    scene.add(bar);
-    for (const ex of [-1.7, 1.7]) {
-      for (const tilt of [-0.35, 0.35]) {
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.5, 0.12), frameMat);
-        leg.rotation.x = tilt;
-        leg.position.set(sx + ex, 1.15, z + Math.sin(tilt) * 1.1);
-        scene.add(leg);
+    // Slide: top lip meets the deck edge, rails attached.
+    const slideLen = 3.0;
+    const slideAng = 0.37;
+    const topY = 1.18;
+    const topZ = 1.32;
+    const cy = topY - Math.sin(slideAng) * (slideLen / 2);
+    const cz = topZ + Math.cos(slideAng) * (slideLen / 2);
+    const slide = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.08, slideLen), slideMat);
+    slide.position.set(0, cy, cz);
+    slide.rotation.x = slideAng;
+    pg.add(slide);
+    for (const rx of [-0.45, 0.45]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.2, slideLen), slideMat);
+      rail.position.set(rx, cy + 0.1, cz);
+      rail.rotation.x = slideAng;
+      pg.add(rail);
+    }
+
+    // Swing set: the A-frame legs actually meet the bar ends.
+    const swing = new THREE.Group();
+    const barY = 2.25;
+    const legSpread = 0.95;
+    const legLen = Math.hypot(barY, legSpread) + 0.1;
+    const legAng = Math.atan2(legSpread, barY);
+    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 3.5, 8), frameMat);
+    bar.rotation.z = Math.PI / 2;
+    bar.position.y = barY;
+    swing.add(bar);
+    for (const ex of [-1.65, 1.65]) {
+      for (const side of [-1, 1]) {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.07, legLen, 8), frameMat);
+        leg.rotation.x = legAng * side;
+        leg.position.set(ex, barY / 2, (side * legSpread) / 2);
+        swing.add(leg);
       }
     }
     for (const swx of [-0.7, 0.7]) {
-      for (const chx of [-0.22, 0.22]) {
-        const chain = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.3, 0.04), darkMat);
-        chain.position.set(sx + swx + chx, 1.6, z);
-        scene.add(chain);
+      for (const chx of [-0.2, 0.2]) {
+        const chain = new THREE.Mesh(new THREE.BoxGeometry(0.025, 1.28, 0.025), darkMat);
+        chain.position.set(swx + chx, barY - 0.67, 0);
+        swing.add(chain);
       }
-      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.08, 0.25), darkMat);
-      seat.position.set(sx + swx, 0.92, z);
-      scene.add(seat);
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 0.22), darkMat);
+      seat.position.set(swx, barY - 1.33, 0);
+      swing.add(seat);
     }
+    swing.position.set(-5.5, 0, 0.3);
+    pg.add(swing);
+
+    // Climbing dome: three crossed arcs.
+    for (let i = 0; i < 3; i++) {
+      const arc = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.05, 6, 16, Math.PI), frameMat);
+      arc.position.set(5, 0.06, 1.5);
+      arc.rotation.y = (i / 3) * Math.PI;
+      pg.add(arc);
+    }
+
+    // Seesaw: pivot, plank, handles riding the plank's tilt.
+    const seesaw = new THREE.Group();
+    const tilt = 0.16;
+    const pivot = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.42, 0.28), accentMat);
+    pivot.position.y = 0.21;
+    seesaw.add(pivot);
+    const plank = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.08, 0.3), slideMat);
+    plank.position.y = 0.46;
+    plank.rotation.z = tilt;
+    seesaw.add(plank);
+    for (const ex of [-1.5, 1.5]) {
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.26, 0.04), darkMat);
+      handle.position.set(ex * Math.cos(tilt), 0.46 + ex * Math.sin(tilt) + 0.16, 0);
+      seesaw.add(handle);
+    }
+    seesaw.position.set(3, 0, -3.2);
+    pg.add(seesaw);
+
+    pg.position.set(x, this.getGroundHeight(x, z) + 0.02, z);
+    scene.add(pg);
+  }
+
+  // Brown metropark wayfinding bollards with a yellow band, spaced along
+  // both trails — merged into two meshes.
+  buildBollards(scene) {
+    const postGeos = [];
+    const bandGeos = [];
+    const lines = [this.parkPathPoints, this.pathPoints];
+    for (const points of lines) {
+      for (let i = 16; i < points.length - 10; i += 22) {
+        const t = points[i + 1].clone().sub(points[i - 1]).normalize();
+        const side = (i / 22) % 2 === 0 ? 1 : -1;
+        const x = points[i].x - t.z * 2.9 * side;
+        const z = points[i].z + t.x * 2.9 * side;
+        const y = this.heightAt(x, z);
+        const post = new THREE.CylinderGeometry(0.075, 0.085, 1.15, 8);
+        post.translate(x, y + 0.55, z);
+        postGeos.push(post);
+        const band = new THREE.CylinderGeometry(0.082, 0.082, 0.12, 8);
+        band.translate(x, y + 0.95, z);
+        bandGeos.push(band);
+      }
+    }
+    scene.add(new THREE.Mesh(mergeGeometries(postGeos), lambert({ color: 0x4a3a26, roughness: 0.8 })));
+    scene.add(new THREE.Mesh(mergeGeometries(bandGeos), lambert({ color: 0xc7a23a, roughness: 0.5 })));
   }
 
   buildCrossing(scene) {
@@ -883,9 +1009,10 @@ export class World {
         const f = (c / (cols - 1)) * 2 - 1;
         const px = p.x + nx * halfWidth * f;
         const pz = p.z + nz * halfWidth * f;
-        // 0.35 offset: the terrain mesh interpolates between vertices 2.8m
-        // apart and can bow above the analytic height between them.
-        positions.push(px, this.heightAt(px, pz) + 0.35, pz);
+        // Glued to the rendered surface (mesh-accurate sampling), with just
+        // enough offset to avoid z-fighting.
+        const py = px > 400 ? this.heightAt(px, pz) + 0.1 : this.meshHeightAt(px, pz) + 0.06;
+        positions.push(px, py, pz);
         uvs.push(c / (cols - 1), v);
       }
       if (i < samples) {
@@ -991,6 +1118,7 @@ export class World {
 
   buildForest(scene) {
     const trunkGeos = [];
+    const paleTrunkGeos = [];
     const pineGeos = [];
     const oakGeos = [];
 
@@ -1007,6 +1135,32 @@ export class World {
     };
     const pineGreen = new THREE.Color(0x2f4226);
     const oakGreen = new THREE.Color(0x4a5c30);
+    const sycamoreGreen = new THREE.Color(0x6a7838);
+
+    // Sycamore: tall pale leaning trunk, airy canopy held high.
+    const addSycamore = (x, z) => {
+      const y = this.heightAt(x, z);
+      const height = 8 + Math.random() * 4.5;
+      const lean = (Math.random() - 0.5) * 0.8;
+      const trunk = new THREE.CylinderGeometry(0.2, 0.38, height, 7);
+      jitterGeometry(trunk, 0.12);
+      trunk.translate(lean, height / 2 - 0.3, 0);
+      trunk.translate(x, y, z);
+      paleTrunkGeos.push(trunk);
+      const blobs = 3 + Math.floor(Math.random() * 2);
+      for (let b = 0; b < blobs; b++) {
+        const blob = new THREE.IcosahedronGeometry(1.7 + Math.random() * 1.3, 1);
+        blob.scale(1.2 + Math.random() * 0.5, 0.6 + Math.random() * 0.3, 1.2 + Math.random() * 0.5);
+        jitterGeometry(blob, 0.35);
+        blob.translate(
+          x + lean * 2 + (Math.random() - 0.5) * 3.4,
+          y + height - 1 + (Math.random() - 0.5) * 2.2,
+          z + (Math.random() - 0.5) * 3.4
+        );
+        tintGeo(blob, sycamoreGreen);
+        oakGeos.push(blob);
+      }
+    };
 
     // Jittered conifer: leaning tapered trunk, 3-4 irregular cone tiers.
     const addPine = (x, z) => {
@@ -1071,7 +1225,10 @@ export class World {
       if (World.distanceToPoints(this.pathPoints, x, z) < 2.8) continue;
       if (this.towerPosition.distanceTo(new THREE.Vector3(x, 0, z)) < 12) continue;
       if (this.heightAt(x, z) < -0.4) continue;
-      Math.random() < 0.65 ? addPine(x, z) : addOak(x, z);
+      const roll = Math.random();
+      if (roll < 0.58) addPine(x, z);
+      else if (roll < 0.85) addOak(x, z);
+      else addSycamore(x, z);
       placed++;
     }
 
@@ -1085,11 +1242,19 @@ export class World {
       if (x > -32 && x < 36 && z > -118 && z < -80) continue; // lot/shelter/playground
       if (x > 9 && x < 21 && z < -110) continue; // driveway
       if (World.distanceToPoints(this.parkPathPoints, x, z) < 3.5) continue;
-      Math.random() < 0.6 ? addOak(x, z) : addPine(x, z);
+      const roll = Math.random();
+      if (roll < 0.45) addOak(x, z);
+      else if (roll < 0.75) addSycamore(x, z); // floodplain bank trees
+      else addPine(x, z);
       bankPlaced++;
     }
 
     scene.add(new THREE.Mesh(mergeGeometries(trunkGeos), lambert({ map: tex.barkTexture(1) })));
+    if (paleTrunkGeos.length) {
+      scene.add(
+        new THREE.Mesh(mergeGeometries(paleTrunkGeos), lambert({ map: tex.sycamoreBarkTexture(1) }))
+      );
+    }
     scene.add(
       new THREE.Mesh(
         mergeGeometries(pineGeos),
