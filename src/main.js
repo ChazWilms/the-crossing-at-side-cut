@@ -8,6 +8,7 @@ import { Player } from './player.js';
 import { GameAudio } from './audio.js';
 import { NotDeer } from './notdeer.js';
 import { Effigies } from './effigies.js';
+import { Notes } from './notes.js';
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, RENDER_WIDTH / RENDER_HEIGHT, 0.1, 200);
@@ -23,6 +24,13 @@ composer.addPass(bloomPass);
 
 // --- Version log shown on the menu screen ---
 const CHANGELOG = [
+  {
+    v: '0.6.0',
+    items: [
+      'Four notes scattered along the route tell you who came here before you',
+      'Before you ever reach the tower, something watches from the treeline. Approach and it is gone.',
+    ],
+  },
   {
     v: '0.5.0',
     items: [
@@ -150,6 +158,18 @@ let doorOpen = false;
 let sealHintCooldown = 0;
 doorSlab.position.set(world.doorPosition.x + 0.15, 1.55, world.doorPosition.z);
 scene.add(doorSlab);
+
+// Scattered notes telling the story of the last person who came here.
+const notes = new Notes(scene, world);
+
+// --- The watcher: before you ever reach the tower, the deer is sometimes
+// just... there, in the treeline, facing you. Get close and it's gone.
+const watcher = new NotDeer();
+watcher.visible = false;
+scene.add(watcher);
+let chaseHappened = false;
+let glimpseTimer = 25;
+let glimpseActive = 0;
 player.onStep = (sprinting) => {
   const p = player.yawObject.position;
   audio.footstep(world.surfaceAt(p.x, p.z), sprinting);
@@ -169,6 +189,8 @@ let chaseActive = false;
 let chaseStartTime = 0;
 notDeer.onChaseStarted = () => {
   chaseActive = true;
+  chaseHappened = true;
+  watcher.visible = false;
   chaseStartTime = performance.now();
   player.setChaseMode(true);
 };
@@ -432,6 +454,45 @@ function animate() {
   notDeer.update(dt, player, world, audio);
   const p = player.yawObject.position;
   world.update(dt, p);
+
+  // Lore notes.
+  const noteText = notes.update(p);
+  if (noteText) {
+    showMessage(noteText, 9000);
+    audio.burst({ dur: 0.12, type: 'highpass', freq: 2600, gain: 0.1 });
+  }
+
+  // Treeline glimpses before the first encounter.
+  if (!chaseHappened && !underground) {
+    if (glimpseActive > 0) {
+      glimpseActive -= dt;
+      watcher.update(dt, player, world, audio);
+      if (glimpseActive <= 0 || watcher.position.distanceTo(p) < 16) {
+        watcher.visible = false;
+        glimpseActive = 0;
+        glimpseTimer = 45 + Math.random() * 50;
+        audio.creatureNoise(0.5);
+      }
+    } else {
+      glimpseTimer -= dt;
+      if (glimpseTimer <= 0) {
+        glimpseTimer = 12; // retry soon if no valid spot found
+        for (let i = 0; i < 8; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const d = 26 + Math.random() * 10;
+          const gx = p.x + Math.cos(a) * d;
+          const gz = p.z + Math.sin(a) * d;
+          if (gx > 380) continue;
+          const gy = world.heightAt(gx, gz);
+          if (gy < -0.3) continue;
+          watcher.position.set(gx, gy, gz);
+          watcher.visible = true;
+          glimpseActive = 4 + Math.random() * 3;
+          break;
+        }
+      }
+    }
+  }
   const ground = new THREE.Vector3(p.x, 0, p.z);
   checkTransitions(ground);
   audio.setAmbience(world.windLevel(p.x, p.z), world.riverProximity(p.x, p.z));
