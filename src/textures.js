@@ -232,6 +232,58 @@ export function asphaltTexture(repeat) {
   }, repeat);
 }
 
+// Leaf-clump detail for tree canopies. Drawn in neutral tones so the
+// per-tree vertex tint provides the color.
+export function foliageTexture(repeat = 3) {
+  return makeTex(256, (ctx, S) => {
+    ctx.fillStyle = '#b2b2b2';
+    ctx.fillRect(0, 0, S, S);
+    blotches(ctx, S, ['126,126,126', '170,170,170', '142,142,142'], 26, 24, 80, 0.4);
+    for (let i = 0; i < 1700; i++) {
+      const shade = 130 + Math.floor(Math.random() * 110);
+      ctx.fillStyle = `rgba(${shade},${shade},${shade},0.6)`;
+      ctx.beginPath();
+      ctx.ellipse(
+        Math.random() * S,
+        Math.random() * S,
+        1.6 + Math.random() * 2.6,
+        1 + Math.random() * 1.6,
+        Math.random() * 3,
+        0,
+        7
+      );
+      ctx.fill();
+    }
+    // Deep shadow pockets.
+    blotches(ctx, S, ['46,46,46'], 14, 8, 24, 0.35);
+  }, repeat);
+}
+
+// Dirt path with feathered alpha edges so it melts into the grass
+// instead of ending at a hard ribbon seam.
+export function pathTexture() {
+  return makeTex(256, (ctx, S) => {
+    ctx.clearRect(0, 0, S, S);
+    ctx.fillStyle = '#97794f';
+    ctx.fillRect(0, 0, S, S);
+    blotches(ctx, S, ['122,94,56', '168,140,94', '106,82,48'], 24, 24, 90, 0.3);
+    specks(ctx, S, ['#8a6c42', '#b09262', '#7a5e38', '#bfa172'], 4000, 2, 1);
+    // Carve feathered edges out of the alpha channel (u runs across).
+    const img = ctx.getImageData(0, 0, S, S);
+    for (let x = 0; x < S; x++) {
+      const edge = Math.min(x, S - 1 - x) / S; // 0 at edges, 0.5 center
+      const a = Math.min(1, edge / 0.16);
+      const alpha = Math.floor(255 * a * a);
+      if (alpha < 255) {
+        for (let y = 0; y < S; y++) {
+          img.data[(y * S + x) * 4 + 3] = Math.min(img.data[(y * S + x) * 4 + 3], alpha);
+        }
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  });
+}
+
 // Two-lane road: asphalt with a dashed yellow center line running along v.
 export function roadTexture() {
   return makeTex(256, (ctx, S) => {

@@ -883,9 +883,11 @@ export class World {
   }
 
   buildPaths(scene) {
-    const dirtMat = lambert({ map: tex.dirtTexture(1) });
-    this.buildRibbon(scene, this.parkPathLine, 1.8, dirtMat);
-    this.buildRibbon(scene, this.islandPathLine, 2.0, dirtMat);
+    // Feathered edges blend the trail into the grass.
+    const dirtMat = lambert({ map: tex.pathTexture(), transparent: true });
+    dirtMat.map.wrapS = THREE.ClampToEdgeWrapping;
+    this.buildRibbon(scene, this.parkPathLine, 2.1, dirtMat);
+    this.buildRibbon(scene, this.islandPathLine, 2.3, dirtMat);
   }
 
   // Low-poly rocks: wayfinding markers along both paths plus natural scatter.
@@ -1065,10 +1067,16 @@ export class World {
 
     scene.add(new THREE.Mesh(mergeGeometries(trunkGeos), lambert({ map: tex.barkTexture(1) })));
     scene.add(
-      new THREE.Mesh(mergeGeometries(pineGeos), lambert({ color: 0xffffff, vertexColors: true }))
+      new THREE.Mesh(
+        mergeGeometries(pineGeos),
+        lambert({ map: tex.foliageTexture(2), color: 0xffffff, vertexColors: true })
+      )
     );
     scene.add(
-      new THREE.Mesh(mergeGeometries(oakGeos), lambert({ color: 0xffffff, vertexColors: true }))
+      new THREE.Mesh(
+        mergeGeometries(oakGeos),
+        lambert({ map: tex.foliageTexture(3), color: 0xffffff, vertexColors: true })
+      )
     );
   }
 
@@ -1080,7 +1088,7 @@ export class World {
     const tuftGeos = [];
     let placed = 0;
     let attempts = 0;
-    while (placed < 420 && attempts < 3000) {
+    while (placed < 760 && attempts < 5500) {
       attempts++;
       const x = THREE.MathUtils.lerp(-250, 250, Math.random());
       const z = THREE.MathUtils.lerp(-148, 105, Math.random());

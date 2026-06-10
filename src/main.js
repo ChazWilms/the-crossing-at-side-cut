@@ -29,6 +29,14 @@ composer.addPass(bloomPass);
 // --- Version log shown on the menu screen ---
 const CHANGELOG = [
   {
+    v: '1.5.0',
+    items: [
+      'GRAPHICS: leaf-clump detail on every tree canopy instead of flat color',
+      'GRAPHICS: trails melt into the grass with feathered edges',
+      'Nearly double the ground cover',
+    ],
+  },
+  {
     v: '1.4.0',
     items: [
       'W River Road now divides the park from the sledding hill, matching the real Side Cut layout',
