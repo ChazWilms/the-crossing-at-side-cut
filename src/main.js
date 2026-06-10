@@ -7,6 +7,7 @@ import { World } from './world.js';
 import { Player } from './player.js';
 import { GameAudio } from './audio.js';
 import { NotDeer } from './notdeer.js';
+import { Effigies } from './effigies.js';
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, RENDER_WIDTH / RENDER_HEIGHT, 0.1, 200);
@@ -22,6 +23,15 @@ composer.addPass(bloomPass);
 
 // --- Version log shown on the menu screen ---
 const CHANGELOG = [
+  {
+    v: '0.3.0',
+    items: [
+      'New objective: five effigies wait at marked places — playground, sledding hill, the crossing, the forest path, the east shore',
+      'The tower door is sealed by stone until all five are found',
+      'Candlelight and faint beams mark each effigy; chimes and a distant stone-grind tell your progress',
+      'Objective tracker (top-left) and message toasts',
+    ],
+  },
   {
     v: '0.2.0',
     items: [
@@ -94,6 +104,35 @@ const spawnFuelCan = (x, z, yOffset = 0.2) => {
 spawnFuelCan(80, 15);     // Forest
 spawnFuelCan(120, -5);    // Path
 spawnFuelCan(485, 12, -15); // Tower basement ledge
+
+// --- The effigy hunt: five marked places, then the tower opens ---
+const effigies = new Effigies(scene, world);
+const objectiveEl = document.getElementById('objective');
+const messageEl = document.getElementById('message');
+let messageTimer = null;
+function showMessage(text, ms = 4200) {
+  messageEl.textContent = text;
+  messageEl.style.opacity = 1;
+  clearTimeout(messageTimer);
+  messageTimer = setTimeout(() => (messageEl.style.opacity = 0), ms);
+}
+function setObjective() {
+  objectiveEl.textContent = effigies.allCollected
+    ? 'The tower is open.'
+    : `Effigies: ${effigies.count}/${effigies.total} — follow the candlelight`;
+}
+setObjective();
+
+// The tower doorway is sealed by a stone slab until the hunt is done.
+const doorSlab = new THREE.Mesh(
+  new THREE.BoxGeometry(0.5, 3.3, 2.4),
+  new THREE.MeshStandardMaterial({ color: 0x6a655c, roughness: 0.9 })
+);
+let doorOpening = false;
+let doorOpen = false;
+let sealHintCooldown = 0;
+doorSlab.position.set(world.doorPosition.x + 0.15, 1.55, world.doorPosition.z);
+scene.add(doorSlab);
 player.onStep = (sprinting) => {
   const p = player.yawObject.position;
   audio.footstep(world.surfaceAt(p.x, p.z), sprinting);
@@ -184,6 +223,13 @@ function teleport(position, facing, toUnderground) {
 function checkTransitions(p) {
   if (teleportCooldown > 0) return;
   if (!underground && p.distanceTo(world.doorPosition) < 1.4) {
+    if (!doorOpen) {
+      if (sealHintCooldown <= 0) {
+        sealHintCooldown = 4;
+        showMessage(`The door is sealed. ${effigies.count}/${effigies.total} effigies.`);
+      }
+      return;
+    }
     // Into the dark: arrive on the ledge, facing along it toward the ramp.
     teleport(world.descentEntry, Math.PI - 0.55, true);
   } else if (underground && p.distanceTo(world.descentExit) < 1.6) {
@@ -299,6 +345,28 @@ function animate() {
       world.setNightness(nightFactor, underground);
       fade.style.opacity = 0;
     }, 3000);
+  }
+
+  // Effigy hunt progress.
+  sealHintCooldown = Math.max(0, sealHintCooldown - dt);
+  const picked = effigies.update(dt, player.yawObject.position, audio);
+  if (picked) {
+    setObjective();
+    if (effigies.allCollected) {
+      showMessage('The last effigy. Far away, stone grinds against stone.', 6000);
+      doorOpening = true;
+      audio.rumbleOpen();
+    } else {
+      showMessage(`An effigy, ${picked}. ${effigies.count}/${effigies.total}.`);
+    }
+  }
+  if (doorOpening) {
+    doorSlab.position.y -= dt * 0.7;
+    if (doorSlab.position.y < -2.1) {
+      doorOpening = false;
+      doorOpen = true;
+      scene.remove(doorSlab);
+    }
   }
 
   notDeer.update(dt, player, world, audio);

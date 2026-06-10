@@ -213,6 +213,34 @@ export class GameAudio {
     }
   }
 
+  /** Soft two-note chime + woody knock for picking up an effigy. */
+  effigyPickup() {
+    if (!this.started) return;
+    const t = this.ctx.currentTime + 0.02;
+    for (const [freq, delay] of [[523.25, 0], [659.25, 0.14]]) {
+      const osc = this.ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0, t + delay);
+      g.gain.linearRampToValueAtTime(0.22, t + delay + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, t + delay + 1.4);
+      osc.connect(g).connect(this.master);
+      osc.start(t + delay);
+      osc.stop(t + delay + 1.5);
+    }
+    this.knock({ freq: 220, freqEnd: 90, dur: 0.1, gain: 0.12 });
+  }
+
+  /** Deep stone-grinding rumble for the tower door unsealing. */
+  rumbleOpen() {
+    if (!this.started) return;
+    this.burst({ dur: 2.6, freq: 120, freqEnd: 60, gain: 0.4 });
+    for (let i = 0; i < 5; i++) {
+      this.knock({ freq: 55 + Math.random() * 20, freqEnd: 30, dur: 0.4, gain: 0.25, delay: i * 0.45 });
+    }
+  }
+
   // --- The Not-Deer's voice ---
 
   /** The moment it stands up: a tearing scream-dive. */

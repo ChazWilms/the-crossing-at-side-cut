@@ -103,6 +103,32 @@
     }
     #changelog::-webkit-scrollbar { width: 4px; }
     #changelog::-webkit-scrollbar-thumb { background: rgba(201, 180, 138, 0.35); }
+    #objective {
+      position: absolute;
+      top: 14px;
+      left: 16px;
+      z-index: 5;
+      color: #e4cf9c;
+      font-size: 13px;
+      letter-spacing: 1px;
+      text-shadow: 0 1px 3px #000;
+      pointer-events: none;
+    }
+    #message {
+      position: absolute;
+      top: 18%;
+      left: 0;
+      right: 0;
+      text-align: center;
+      z-index: 6;
+      color: #e8d8ae;
+      font-size: 17px;
+      letter-spacing: 2px;
+      text-shadow: 0 2px 6px #000;
+      opacity: 0;
+      transition: opacity 0.6s;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -114,6 +140,8 @@
   <div id="hud">
     <div id="stamina"><div id="stamina-fill"></div></div>
   </div>
+  <div id="objective"></div>
+  <div id="message"></div>
   <div id="fade"></div>
   <script type="module" src="/src/main.js"></script>
 </body>
