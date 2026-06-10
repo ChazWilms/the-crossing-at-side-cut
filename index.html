@@ -129,6 +129,47 @@
       transition: opacity 0.6s;
       pointer-events: none;
     }
+    #vignette {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center, transparent 52%, rgba(8, 2, 2, 0.85) 100%);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 4;
+    }
+    #bigtext {
+      position: absolute;
+      top: 42%;
+      left: 0;
+      right: 0;
+      text-align: center;
+      z-index: 9;
+      font-size: 42px;
+      letter-spacing: 10px;
+      text-shadow: 0 3px 14px #000;
+      opacity: 0;
+      transition: opacity 0.8s;
+      pointer-events: none;
+    }
+    #vol {
+      position: absolute;
+      left: 18px;
+      bottom: 14px;
+      font-size: 13px;
+      color: #c9b48a;
+      user-select: none;
+    }
+    #vol button {
+      background: none;
+      border: 1px solid rgba(201, 180, 138, 0.5);
+      color: #c9b48a;
+      font-family: inherit;
+      font-size: 14px;
+      width: 26px;
+      height: 24px;
+      cursor: pointer;
+    }
+    #vol button:hover { background: rgba(201, 180, 138, 0.2); }
   </style>
 </head>
 <body>
@@ -136,7 +177,10 @@
     <h1>The Crossing at Side Cut</h1>
     <p>Click to begin &mdash; WASD to move, SHIFT to sprint, SPACE to jump,<br/>C to crouch, Q to glance back, F for fullscreen</p>
     <div id="changelog"></div>
+    <div id="vol">VOLUME <button id="vol-down">&minus;</button> <span id="vol-val">80%</span> <button id="vol-up">+</button></div>
   </div>
+  <div id="vignette"></div>
+  <div id="bigtext"></div>
   <div id="hud">
     <div id="stamina"><div id="stamina-fill"></div></div>
   </div>

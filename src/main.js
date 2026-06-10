@@ -24,6 +24,14 @@ composer.addPass(bloomPass);
 // --- Version log shown on the menu screen ---
 const CHANGELOG = [
   {
+    v: '0.5.0',
+    items: [
+      'Volume control on the menu (persists between visits)',
+      'Sprint widens your field of view; exhaustion closes a vignette around the edges',
+      'Proper IT FOUND YOU / YOU MADE IT BACK moments, with escape time and best-time tracking',
+    ],
+  },
+  {
     v: '0.4.0',
     items: [
       'Ground mist drifts over the river and through the island woods',
@@ -158,10 +166,34 @@ let teleportCooldown = 0;
 let nightFactor = 0;
 let chaseActive = false;
 
+let chaseStartTime = 0;
 notDeer.onChaseStarted = () => {
   chaseActive = true;
+  chaseStartTime = performance.now();
   player.setChaseMode(true);
 };
+
+// --- QoL UI: vignette, big-moment text, volume control ---
+const vignetteEl = document.getElementById('vignette');
+const bigtextEl = document.getElementById('bigtext');
+function showBigText(text, color, ms = 4500) {
+  bigtextEl.textContent = text;
+  bigtextEl.style.color = color;
+  bigtextEl.style.opacity = 1;
+  setTimeout(() => (bigtextEl.style.opacity = 0), ms);
+}
+const volVal = document.getElementById('vol-val');
+function syncVolLabel() {
+  volVal.textContent = `${Math.round(audio.volumeScale * 100)}%`;
+}
+syncVolLabel();
+for (const [id, delta] of [['vol-down', -0.1], ['vol-up', 0.1]]) {
+  document.getElementById(id).addEventListener('click', (e) => {
+    e.stopPropagation(); // don't trigger the click-to-start overlay
+    audio.setMasterVolume(Math.round((audio.volumeScale + delta) * 10) / 10);
+    syncVolLabel();
+  });
+}
 
 // --- Pointer lock flow ---
 // ?debug skips the lock so the scene can be inspected/screenshotted headlessly;
@@ -315,6 +347,15 @@ function animate() {
     world.setNightness(nightFactor, underground);
     audio.setMusicMode('overworld');
 
+    const secs = ((performance.now() - chaseStartTime) / 1000).toFixed(1);
+    const best = parseFloat(localStorage.getItem('sidecut-best') ?? 'Infinity');
+    if (parseFloat(secs) < best) localStorage.setItem('sidecut-best', secs);
+    showBigText('YOU MADE IT BACK', '#e8d8ae', 5000);
+    showMessage(
+      `Escaped in ${secs}s${parseFloat(secs) < best ? ' — a new best.' : ` (best ${Math.min(best, parseFloat(secs)).toFixed(1)}s)`}`,
+      6000
+    );
+
     // Quick win flash
     fade.style.backgroundColor = 'white';
     fade.style.opacity = 1;
@@ -335,6 +376,7 @@ function animate() {
     setTimeout(() => {
       fade.style.opacity = 1;
       audio.gameOver();
+      showBigText('IT FOUND YOU', '#a51f1f', 2600);
     }, 800);
     
     setTimeout(() => {
@@ -377,6 +419,15 @@ function animate() {
       scene.remove(doorSlab);
     }
   }
+
+  // Sprint FOV kick + exhaustion/chase vignette.
+  const targetFov = player.sprinting ? 83 : 75;
+  if (Math.abs(camera.fov - targetFov) > 0.05) {
+    camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 4);
+    camera.updateProjectionMatrix();
+  }
+  const exhaustion = 1 - player.stamina / player.staminaMax;
+  vignetteEl.style.opacity = Math.min(0.85, exhaustion * 0.55 + (chaseActive ? 0.3 : 0));
 
   notDeer.update(dt, player, world, audio);
   const p = player.yawObject.position;

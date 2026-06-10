@@ -5,6 +5,14 @@ export class GameAudio {
   constructor() {
     this.ctx = null;
     this.started = false;
+    this.volumeScale = parseFloat(localStorage.getItem('sidecut-volume') ?? '1');
+  }
+
+  /** 0..1 — scales both the WebAudio graph and the HTML music tracks. */
+  setMasterVolume(v) {
+    this.volumeScale = Math.min(1.5, Math.max(0, v));
+    localStorage.setItem('sidecut-volume', String(this.volumeScale));
+    if (this.master) this.master.gain.value = 0.8 * this.volumeScale;
   }
 
   // Must be called from a user gesture (pointer lock click) — browsers
@@ -17,7 +25,7 @@ export class GameAudio {
     this.ctx = ctx;
 
     this.master = ctx.createGain();
-    this.master.gain.value = 0.8;
+    this.master.gain.value = 0.8 * this.volumeScale;
     this.master.connect(ctx.destination);
 
     // Shared looping noise source material.
@@ -80,7 +88,8 @@ export class GameAudio {
     this.tracks.ambient.target = this.tracks.ambient.max;
     setInterval(() => {
       for (const t of Object.values(this.tracks)) {
-        const v = t.el.volume + (t.target - t.el.volume) * 0.1;
+        const goal = t.target * this.volumeScale;
+        const v = t.el.volume + (goal - t.el.volume) * 0.1;
         t.el.volume = Math.min(1, Math.max(0, v));
         // Keep paused-by-autoplay tracks retrying until they can start.
         if (t.el.paused && t.target > 0) t.el.play().catch(() => {});
