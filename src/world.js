@@ -507,6 +507,124 @@ export class World {
     this.buildCar(scene, 8, -109.3, 0.06);
     this.buildShelter(scene, 6, -88);
     this.buildPlayground(scene, -16, -94);
+    this.buildParkProps(scene);
+  }
+
+  // Park furnishings: the small human things that make the place feel
+  // recently abandoned rather than never inhabited.
+  buildParkProps(scene) {
+    this.buildPicnicTable(scene, 6, -88.5, 0.2);
+    this.buildPicnicTable(scene, 13.5, -83.5, 1.2);
+    this.buildBench(scene, -28, -89, 0.6);
+    this.buildBench(scene, -70, -64.5, 2.3);
+    this.buildTrashCan(scene, 1.8, -99.2);
+    this.buildTrashCan(scene, 10.8, -91.8);
+    this.buildLamppost(scene, 0.5, -103);
+    this.buildLamppost(scene, -13, -89.5);
+    this.buildLamppost(scene, 18.5, -99.5);
+    this.buildSign(scene, 0.2, -99.6);
+  }
+
+  buildPicnicTable(scene, x, z, rotY) {
+    const wood = lambert({ map: tex.barkTexture(1), color: 0x9a7e5c });
+    const g = new THREE.Group();
+    const top = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.1, 0.9), wood);
+    top.position.y = 0.76;
+    g.add(top);
+    for (const sz of [-0.62, 0.62]) {
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.08, 0.28), wood);
+      seat.position.set(0, 0.45, sz);
+      g.add(seat);
+    }
+    for (const sx of [-0.85, 0.85]) {
+      const legs = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.76, 1.5), wood);
+      legs.position.set(sx, 0.38, 0);
+      g.add(legs);
+    }
+    g.position.set(x, this.getGroundHeight(x, z) + 0.04, z);
+    g.rotation.y = rotY;
+    scene.add(g);
+  }
+
+  buildBench(scene, x, z, rotY) {
+    const wood = lambert({ map: tex.barkTexture(1), color: 0x8a7050 });
+    const iron = lambert({ color: 0x2c2c30 });
+    const g = new THREE.Group();
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.08, 0.45), wood);
+    seat.position.y = 0.45;
+    g.add(seat);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.5, 0.07), wood);
+    back.position.set(0, 0.78, -0.22);
+    back.rotation.x = 0.12;
+    g.add(back);
+    for (const sx of [-0.7, 0.7]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.45, 0.4), iron);
+      leg.position.set(sx, 0.22, 0);
+      g.add(leg);
+    }
+    g.position.set(x, this.getGroundHeight(x, z) + 0.03, z);
+    g.rotation.y = rotY;
+    scene.add(g);
+  }
+
+  buildTrashCan(scene, x, z) {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.34, 0.3, 0.9, 10),
+      lambert({ color: 0x32503a, roughness: 0.85 })
+    );
+    body.position.y = 0.45;
+    g.add(body);
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.37, 0.37, 0.08, 10), lambert({ color: 0x222426 }));
+    rim.position.y = 0.92;
+    g.add(rim);
+    g.position.set(x, this.getGroundHeight(x, z) + 0.02, z);
+    scene.add(g);
+  }
+
+  buildLamppost(scene, x, z) {
+    const g = new THREE.Group();
+    const iron = lambert({ color: 0x26262a, metalness: 0.6, roughness: 0.5 });
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 3.8, 8), iron);
+    pole.position.y = 1.9;
+    g.add(pole);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.3, 0.34), iron);
+    head.position.y = 3.9;
+    g.add(head);
+    const pane = new THREE.Mesh(
+      new THREE.BoxGeometry(0.26, 0.2, 0.26),
+      new THREE.MeshBasicMaterial({ color: 0xffd9a0 })
+    );
+    pane.position.y = 3.86;
+    g.add(pane);
+    const light = new THREE.PointLight(0xffc580, 12, 15, 1.7);
+    light.position.y = 3.7;
+    g.add(light);
+    g.position.set(x, this.getGroundHeight(x, z), z);
+    scene.add(g);
+  }
+
+  buildSign(scene, x, z) {
+    const g = new THREE.Group();
+    const wood = lambert({ map: tex.barkTexture(1), color: 0x7a5c3c });
+    for (const sx of [-0.55, 0.55]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.6, 0.1), wood);
+      post.position.set(sx, 0.8, 0);
+      g.add(post);
+    }
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.7, 0.06), wood);
+    panel.position.y = 1.35;
+    g.add(panel);
+    const inset = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.34, 0.54),
+      new THREE.MeshBasicMaterial({ color: 0xc9b48a })
+    );
+    inset.position.set(0, 1.35, 0.035);
+    g.add(inset);
+    // Faces the parking lot, marking the trailhead.
+    g.rotation.y = Math.PI / 2 + 0.3;
+    g.position.set(x, this.getGroundHeight(x, z), z);
+    scene.add(g);
   }
 
   buildCar(scene, x, z, rotY) {

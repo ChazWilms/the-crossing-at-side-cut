@@ -25,6 +25,13 @@ composer.addPass(bloomPass);
 // --- Version log shown on the menu screen ---
 const CHANGELOG = [
   {
+    v: '0.7.0',
+    items: [
+      'The park is furnished: picnic tables, benches along the trail, trash cans, a trailhead sign',
+      'Three lampposts cast warm light over the Riverview Area as the sun goes down',
+    ],
+  },
+  {
     v: '0.6.0',
     items: [
       'Four notes scattered along the route tell you who came here before you',
