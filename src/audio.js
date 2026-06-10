@@ -60,38 +60,54 @@ export class GameAudio {
     this.startMusic();
   }
 
-  // Generative score: slow dark chord pads crossfading into each other,
-  // with a sparse, lonely bell note now and then. Synthesized like
-  // everything else — no audio files.
+  // Generative score: slow chord pads crossfading into each other, with a
+  // sparse bell note now and then. Three moods — the overworld's uneasy
+  // minor wander, the basement's dissonant半-step clusters, and the
+  // chase's pounding pulse. Synthesized like everything else.
   startMusic() {
     const ctx = this.ctx;
+    this.musicMode = 'overworld';
     const out = ctx.createGain();
-    out.gain.value = 0.055;
+    out.gain.value = 0.12;
+    this.musicOut = out;
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.value = 750;
+    this.musicFilter = filter;
     filter.connect(out);
     out.connect(this.master);
 
     // A natural-minor wander that never resolves.
-    const CHORDS = [
+    const OVERWORLD = [
       [55.0, 82.41, 110.0, 130.81], // Am
       [43.65, 65.41, 87.31, 130.81], // F
       [49.0, 73.42, 98.0, 123.47], // G
-      [41.2, 61.74, 82.41, 123.47], // Em over E
+      [41.2, 61.74, 82.41, 123.47], // Em
     ];
-    const HOLD = 16; // chord length (s)
-    const STEP = 12; // next chord starts 4s before this one fades out
+    // Semitone clusters — wrongness as harmony.
+    const UNDERGROUND = [
+      [55.0, 58.27, 82.41, 87.31],
+      [51.91, 55.0, 77.78, 82.41],
+      [58.27, 61.74, 87.31, 92.5],
+      [49.0, 51.91, 73.42, 77.78],
+    ];
+    const HOLD = 16;
+    const STEP = 12;
 
     let idx = 0;
     const playChord = (freqs) => {
       const t = ctx.currentTime + 0.05;
+      const drift = this.musicMode !== 'overworld';
       for (const f of freqs) {
         for (const detune of [-5, 4]) {
           const osc = ctx.createOscillator();
           osc.type = 'triangle';
           osc.frequency.value = f;
           osc.detune.value = detune;
+          if (drift) {
+            // Slow queasy pitch drift underground / during the chase.
+            osc.detune.linearRampToValueAtTime(detune + (Math.random() - 0.5) * 45, t + HOLD);
+          }
           const g = ctx.createGain();
           g.gain.setValueAtTime(0, t);
           g.gain.linearRampToValueAtTime(0.28, t + 4.5);
@@ -103,10 +119,10 @@ export class GameAudio {
         }
       }
     };
-    playChord(CHORDS[0]);
+    playChord(OVERWORLD[0]);
     setInterval(() => {
-      idx = (idx + 1) % CHORDS.length;
-      playChord(CHORDS[idx]);
+      idx = (idx + 1) % 4;
+      playChord(this.musicMode === 'overworld' ? OVERWORLD[idx] : UNDERGROUND[idx]);
     }, STEP * 1000);
 
     // The bell: a quiet high note at irregular, long intervals.
@@ -115,7 +131,9 @@ export class GameAudio {
       const t = ctx.currentTime + 0.05;
       const osc = ctx.createOscillator();
       osc.type = 'sine';
-      osc.frequency.value = NOTES[Math.floor(Math.random() * NOTES.length)] * (Math.random() < 0.35 ? 0.5 : 1);
+      // Underground the bell goes sour — a quarter-tone flat.
+      const sour = this.musicMode === 'overworld' ? 1 : 0.972;
+      osc.frequency.value = NOTES[Math.floor(Math.random() * NOTES.length)] * sour * (Math.random() < 0.35 ? 0.5 : 1);
       const g = ctx.createGain();
       g.gain.setValueAtTime(0, t);
       g.gain.linearRampToValueAtTime(0.5, t + 0.03);
@@ -126,6 +144,81 @@ export class GameAudio {
       setTimeout(bell, 9000 + Math.random() * 14000);
     };
     setTimeout(bell, 7000);
+
+    // Chase pulse: a heartbeat-turned-drum, started/stopped by mode.
+    this.pulseTimer = null;
+  }
+
+  setMusicMode(mode) {
+    if (!this.started || this.musicMode === mode) return;
+    this.musicMode = mode;
+    const t = this.ctx.currentTime;
+    const settings = {
+      overworld: { freq: 750, gain: 0.12 },
+      underground: { freq: 420, gain: 0.16 },
+      chase: { freq: 1000, gain: 0.19 },
+    }[mode];
+    this.musicFilter.frequency.setTargetAtTime(settings.freq, t, 1.5);
+    this.musicOut.gain.setTargetAtTime(settings.gain, t, 1.5);
+
+    if (mode === 'chase' && !this.pulseTimer) {
+      const beat = () => {
+        this.knock({ freq: 75, freqEnd: 38, dur: 0.16, gain: 0.34 });
+        this.knock({ freq: 70, freqEnd: 36, dur: 0.12, gain: 0.22, delay: 0.34 });
+      };
+      beat();
+      this.pulseTimer = setInterval(beat, 860);
+    } else if (mode !== 'chase' && this.pulseTimer) {
+      clearInterval(this.pulseTimer);
+      this.pulseTimer = null;
+    }
+  }
+
+  // --- The Not-Deer's voice ---
+
+  /** The moment it stands up: a tearing scream-dive. */
+  creatureScream() {
+    if (!this.started) return;
+    const t = this.ctx.currentTime + 0.02;
+    for (const det of [-18, 0, 23]) {
+      const osc = this.ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(640 + det * 3, t);
+      osc.frequency.exponentialRampToValueAtTime(82, t + 1.3);
+      osc.detune.value = det;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.17, t + 0.04);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
+      osc.connect(g).connect(this.master);
+      osc.start(t);
+      osc.stop(t + 1.6);
+    }
+    this.burst({ dur: 1.1, type: 'highpass', freq: 1500, gain: 0.2 });
+    this.burst({ dur: 0.5, freq: 250, gain: 0.3 });
+  }
+
+  /** Wrong clicking-chitter, volume scaled by proximity (0..1). */
+  creatureNoise(proximity) {
+    if (!this.started || proximity <= 0) return;
+    const clicks = 5 + Math.floor(Math.random() * 5);
+    for (let i = 0; i < clicks; i++) {
+      this.burst({
+        dur: 0.018,
+        type: 'bandpass',
+        freq: 1200 + Math.random() * 1300,
+        q: 6,
+        gain: 0.16 * proximity,
+        delay: i * (0.028 + Math.random() * 0.02),
+      });
+    }
+    this.knock({
+      freq: 130 + Math.random() * 60,
+      freqEnd: 55,
+      dur: 0.3,
+      gain: 0.1 * proximity,
+      delay: clicks * 0.03 + 0.05,
+    });
   }
 
   makeNoiseBuffer(seconds) {

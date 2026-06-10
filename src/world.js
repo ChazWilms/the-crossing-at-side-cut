@@ -39,7 +39,7 @@ DESC.drop = -DESC.chamberY / (DESC.maxTheta - DESC.ledge); // meters per radian
 const rampY = (t) =>
   Math.max(-DESC.drop * Math.max(0, t - DESC.ledge), DESC.chamberY);
 
-function lambert(opts) {
+export function lambert(opts) {
   return applyRetroMaterial(new THREE.MeshLambertMaterial(opts));
 }
 
@@ -93,7 +93,7 @@ const smoothstep = (e0, e1, x) => {
 
 // Hand-modeled jank: displace vertices by a hash of their position, so
 // shared/seam vertices move identically and meshes never crack.
-function jitterGeometry(geo, amount) {
+export function jitterGeometry(geo, amount) {
   const pos = geo.attributes.position;
   const h = (x, y, z, s) => {
     const v = Math.sin(x * 127.1 + y * 311.7 + z * 74.7 + s * 53.3) * 43758.5453;

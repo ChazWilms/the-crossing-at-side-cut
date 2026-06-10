@@ -3,6 +3,7 @@ import { RetroRenderer, RENDER_WIDTH, RENDER_HEIGHT } from './retro.js';
 import { World } from './world.js';
 import { Player } from './player.js';
 import { GameAudio } from './audio.js';
+import { NotDeer } from './notdeer.js';
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, RENDER_WIDTH / RENDER_HEIGHT, 0.1, 200);
@@ -18,6 +19,10 @@ player.yawObject.rotation.y = Math.PI / 2;
 scene.add(player.yawObject);
 
 const audio = new GameAudio();
+
+const notDeer = new NotDeer();
+notDeer.position.set(80, 0, 15);
+scene.add(notDeer);
 player.onStep = (sprinting) => {
   const p = player.yawObject.position;
   audio.footstep(world.surfaceAt(p.x, p.z), sprinting);
@@ -115,6 +120,7 @@ function animate() {
   if (document.pointerLockElement || debug) {
     player.update(dt);
   }
+  notDeer.update(dt, player, world, audio);
   world.update(dt);
   const p = player.yawObject.position;
   const ground = new THREE.Vector3(p.x, 0, p.z);
