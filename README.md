@@ -1,9 +1,16 @@
 # The Crossing at Side Cut
 
-A first-person horror game with a retro PS1/N64 aesthetic, set at Blue Grass
-Island in Side Cut Metropark, Ohio. Cross the river stones at sunset, follow
-the island path into the fog, find the stone tower on the far beach — and
-survive what waits beneath it.
+A first-person horror game set at Blue Grass Island in Side Cut Metropark,
+Ohio. Cross the river stones at dusk, find the five effigies that unseal the
+stone tower, descend to what waits at the bottom — and outrun it home.
+
+Features: a full collect-open-descend-escape gameplay loop, lore notes
+telling the story of the last people who crossed, a stuttering cryptid built
+on a real animated model, treeline glimpses before the encounter, dynamic
+sunset-to-night atmosphere with mist, fireflies, and stars, real music that
+turns on you during the chase, synthesized wildlife/footsteps/heartbeat, a
+lantern with fuel, stamina with exhaustion vignette, a compass HUD, escape
+best-times, and an in-game update log.
 
 **Play it in the browser** — built with [Three.js](https://threejs.org/) and
 [Vite](https://vitejs.dev/).

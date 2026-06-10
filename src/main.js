@@ -25,6 +25,13 @@ composer.addPass(bloomPass);
 // --- Version log shown on the menu screen ---
 const CHANGELOG = [
   {
+    v: '1.2.0',
+    items: [
+      'Returning to the menu mid-game now reads as a pause',
+      'README/docs refreshed to match the finished loop',
+    ],
+  },
+  {
     v: '1.1.0',
     items: [
       "Dan's backpack and what's left of him wait at the bottom of the pit, with the final journal page",
@@ -336,6 +343,10 @@ overlay.addEventListener('click', () => {
 let introShown = false;
 document.addEventListener('pointerlockchange', () => {
   overlay.classList.toggle('hidden', !!document.pointerLockElement);
+  // Coming back to the menu mid-game reads as a pause, not a fresh start.
+  if (!document.pointerLockElement && introShown) {
+    overlay.querySelector('p').innerHTML = 'Paused &mdash; click to resume';
+  }
   if (document.pointerLockElement && !introShown) {
     introShown = true;
     setTimeout(() => showMessage('Blue Grass Island. October. The sun is going down.', 5500), 1200);
