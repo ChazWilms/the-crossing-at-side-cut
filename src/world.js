@@ -243,7 +243,7 @@ export class World {
     const horizon = new THREE.Color(0xc46a47);
     const zenith = new THREE.Color(0x3a4b6c);
     scene.background = horizon;
-    scene.fog = new THREE.FogExp2(horizon, 0.008);
+    scene.fog = new THREE.FogExp2(horizon, 0.0105);
 
     // Create a sky dome with vertex colors to simulate a gradient sunset sky
     const skyGeo = new THREE.SphereGeometry(800, 32, 16);
@@ -258,9 +258,9 @@ export class World {
       colors[i * 3 + 2] = c.b;
     }
     skyGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    const skyMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false });
-    const sky = new THREE.Mesh(skyGeo, skyMat);
-    scene.add(sky);
+    const skyMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, transparent: true });
+    this.skyMesh = new THREE.Mesh(skyGeo, skyMat);
+    scene.add(this.skyMesh);
 
     this.hemi = new THREE.HemisphereLight(0xffb070, 0x4a3b5c, 1.5);
     scene.add(this.hemi);
@@ -300,9 +300,10 @@ export class World {
     this.scene.fog.color.copy(color);
     this.scene.background.copy(color);
 
-    // Fog distance shrinks in the dark
-    this.scene.fog.near = THREE.MathUtils.lerp(25, 3, factor);
-    this.scene.fog.far = THREE.MathUtils.lerp(140, 30, factor);
+    // FogExp2 has no near/far — the fog thickens via density in the dark.
+    this.scene.fog.density = THREE.MathUtils.lerp(0.0105, 0.055, factor);
+    // The sunset sky dome fades out as night (or the underground) takes over.
+    if (this.skyMesh) this.skyMesh.material.opacity = 1 - factor;
   }
 
   buildTerrain(scene) {
@@ -351,13 +352,39 @@ export class World {
     terrainMesh.castShadow = true;
     scene.add(terrainMesh);
 
-    // Water sheet over the carved riverbed.
-    const waterMat = lambert({ map: tex.waterTexture(80), color: 0xffff00 });
-    this.waterMaterials.push(waterMat);
-    const water = new THREE.Mesh(new THREE.PlaneGeometry(800, 220, 80, 22), waterMat);
-    water.rotation.x = -Math.PI / 2;
+    // Water: two scrolling layers (deep body + bright surface ripple) plus
+    // gentle vertex waves, flowing east like the real Maumee.
+    const waterMat = lambert({
+      map: tex.waterTexture(60),
+      color: 0x96b4c2,
+      transparent: true,
+      opacity: 0.88,
+      roughness: 0.25,
+      metalness: 0.08,
+    });
+    this.waterMaterials.push({ mat: waterMat, sx: 0.05, sy: 0.004 });
+    const waterGeo = new THREE.PlaneGeometry(800, 220, 100, 24);
+    waterGeo.rotateX(-Math.PI / 2);
+    const water = new THREE.Mesh(waterGeo, waterMat);
     water.position.set(150, WATER_Y, 45);
     scene.add(water);
+    this.waterMesh = water;
+    this.waterBase = waterGeo.attributes.position.array.slice();
+    this.waveTime = 0;
+
+    const rippleMat = lambert({
+      map: tex.waterTexture(110),
+      color: 0xdfe9ee,
+      transparent: true,
+      opacity: 0.3,
+      roughness: 0.15,
+      metalness: 0.1,
+    });
+    this.waterMaterials.push({ mat: rippleMat, sx: 0.095, sy: -0.008 });
+    const ripple = new THREE.Mesh(new THREE.PlaneGeometry(800, 220, 4, 2), rippleMat);
+    ripple.rotation.x = -Math.PI / 2;
+    ripple.position.set(150, WATER_Y + 0.08, 45);
+    scene.add(ripple);
   }
 
   // The Riverview Area from the map: parking lot, one lone car, the picnic
@@ -1068,9 +1095,23 @@ export class World {
   }
 
   update(dt) {
-    // Slow texture scroll sells the river current.
-    for (const mat of this.waterMaterials) {
-      if (mat.map) mat.map.offset.x += dt * 0.018;
+    // Scrolling layers + slow rolling waves sell the river current.
+    for (const w of this.waterMaterials) {
+      if (w.mat.map) {
+        w.mat.map.offset.x += w.sx * dt;
+        w.mat.map.offset.y += w.sy * dt;
+      }
+    }
+    if (this.waterMesh) {
+      this.waveTime += dt;
+      const pos = this.waterMesh.geometry.attributes.position;
+      const base = this.waterBase;
+      for (let i = 0; i < pos.count; i++) {
+        const x = base[i * 3];
+        const z = base[i * 3 + 2];
+        pos.setY(i, Math.sin(x * 0.12 + this.waveTime * 1.4) * 0.055 + Math.sin(z * 0.3 + this.waveTime * 0.9) * 0.04);
+      }
+      pos.needsUpdate = true;
     }
 
     // Flicker torches

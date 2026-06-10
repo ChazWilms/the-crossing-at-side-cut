@@ -1,15 +1,18 @@
 import * as THREE from 'three';
 
 const EYE_HEIGHT = 1.7;
-const WALK_SPEED = 10.0;
-const SPRINT_SPEED = 17.0;
+// Deliberate pace: the walk is for taking the world in, the sprint is a
+// real commitment — mix them on the way to the island.
+const WALK_SPEED = 5.0;
+const SPRINT_SPEED = 9.5;
 const JUMP_VELOCITY = 7.5;
 const GRAVITY = -22;
-const MAX_STEP = 1.8; // Allow sprinting up steep hills without getting blocked
+const MAX_STEP = 1.1;
 
-const STAMINA_MAX = 100;
-const STAMINA_DRAIN = 22; // per second while sprinting
-const STAMINA_REGEN = 14; // per second after a short recovery delay
+// A deep tank so sustained running is viable, with a slow burn.
+const STAMINA_MAX = 200;
+const STAMINA_DRAIN = 14; // per second while sprinting
+const STAMINA_REGEN = 22; // per second after a short recovery delay
 const REGEN_DELAY = 1.0;
 
 export class Player {
@@ -37,12 +40,22 @@ export class Player {
     this.lampBasePos = new THREE.Vector3(0.5, -0.6, -0.8);
     this.lampGroup.position.copy(this.lampBasePos);
     
-    // Simple box for the lamp
-    const lampMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(0.15, 0.3, 0.15),
-      new THREE.MeshBasicMaterial({ color: 0xffd080 })
-    );
-    this.lampGroup.add(lampMesh);
+    // A small kerosene lantern: dark metal caps and handle around a warm
+    // glowing glass chimney — not just a glowing box.
+    const metalMat = new THREE.MeshStandardMaterial({ color: 0x2b2b2e, roughness: 0.6, metalness: 0.7 });
+    const glassMat = new THREE.MeshBasicMaterial({ color: 0xffc878 });
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.075, 0.05, 10), metalMat);
+    cap.position.y = 0.13;
+    this.lampGroup.add(cap);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.06, 10), metalMat);
+    base.position.y = -0.12;
+    this.lampGroup.add(base);
+    const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.2, 10), glassMat);
+    this.lampGroup.add(glass);
+    this.lampGlass = glass;
+    const handle = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.012, 6, 14, Math.PI), metalMat);
+    handle.position.y = 0.17;
+    this.lampGroup.add(handle);
 
     // Light casting around the player
     this.lampLight = new THREE.PointLight(0xffb060, 2.0, 15);
@@ -97,9 +110,10 @@ export class Player {
 
   setChaseMode(active) {
     this.chaseActive = active;
-    this.walkSpeed = active ? WALK_SPEED * 2.0 : WALK_SPEED;
-    this.sprintSpeed = active ? SPRINT_SPEED * 2.0 : SPRINT_SPEED;
-    this.eyeHeight = active ? EYE_HEIGHT + 0.3 : EYE_HEIGHT;
+    // Adrenaline, not rocket boots — the deer must stay scary.
+    this.walkSpeed = active ? WALK_SPEED * 1.2 : WALK_SPEED;
+    this.sprintSpeed = active ? SPRINT_SPEED * 1.2 : SPRINT_SPEED;
+    this.eyeHeight = active ? EYE_HEIGHT + 0.2 : EYE_HEIGHT;
   }
 
   update(dt) {
@@ -182,31 +196,61 @@ export class Player {
       }
     }
 
-    // Wobble the lamp based on movement
-    const wobbleSpeed = sprinting ? 12 : 8;
-    const wobbleAmount = moving && this.grounded ? (sprinting ? 0.08 : 0.04) : 0.01;
-    const t = performance.now() * 0.001 * wobbleSpeed;
-    this.lampGroup.position.y = this.lampBasePos.y + Math.sin(t) * wobbleAmount;
-    this.lampGroup.position.x = this.lampBasePos.x + Math.cos(t * 0.5) * wobbleAmount;
-    this.lampGroup.rotation.z = Math.sin(t * 0.5) * wobbleAmount * 2;
-    this.lampGroup.rotation.x = Math.cos(t) * wobbleAmount;
+    // --- Lamp: a carried object, not a metronome. Its sway is synced to
+    // actual footfalls (distance walked), it lags behind turns, and it
+    // pitches when falling or jumping.
+    if (moving && this.grounded) {
+      this.walkPhase = (this.walkPhase ?? 0) + Math.hypot(step.x, step.z) * (Math.PI / (sprinting ? 1.3 : 1.0));
+    }
+    const wp = this.walkPhase ?? 0;
+    const speedF = moving && this.grounded ? Math.min(1, speed / this.sprintSpeed) : 0;
+    let yawDelta = this.yawObject.rotation.y - (this.prevYaw ?? this.yawObject.rotation.y);
+    yawDelta = Math.atan2(Math.sin(yawDelta), Math.cos(yawDelta));
+    this.prevYaw = this.yawObject.rotation.y;
+    const yawVel = dt > 0 ? yawDelta / dt : 0;
 
-    // --- Gravity, jumping, ground snap ---
-    if (this.keys.has('Space') && this.grounded) {
+    const tRotZ = THREE.MathUtils.clamp(yawVel * 0.05, -0.45, 0.45) + Math.sin(wp * 0.5) * 0.07 * speedF;
+    const tRotX = THREE.MathUtils.clamp(-this.velocity.y * 0.03, -0.3, 0.3) + Math.sin(wp) * 0.04 * speedF;
+    const tPosY = this.lampBasePos.y - Math.abs(Math.sin(wp * 0.5)) * 0.05 * speedF;
+    const tPosX = this.lampBasePos.x + Math.sin(wp * 0.5) * 0.03 * speedF;
+    // Exponential smoothing gives the lag of a real swinging object.
+    const k = 1 - Math.exp(-dt * 7);
+    this.lampGroup.rotation.z += (tRotZ - this.lampGroup.rotation.z) * k;
+    this.lampGroup.rotation.x += (tRotX - this.lampGroup.rotation.x) * k;
+    this.lampGroup.position.y += (tPosY - this.lampGroup.position.y) * k;
+    this.lampGroup.position.x += (tPosX - this.lampGroup.position.x) * k;
+
+    // Subtle camera bob on the same footfall rhythm.
+    this.pitchObject.position.y += ((Math.abs(Math.sin(wp * 0.5)) * -0.06 * speedF) - this.pitchObject.position.y) * k;
+
+    // --- Gravity, jumping, and ground-follow ---
+    if (this.keys.has('Space') && this.grounded && !this.disabled) {
       this.velocity.y = JUMP_VELOCITY;
       this.grounded = false;
     }
-    this.velocity.y += GRAVITY * dt;
-    pos.y += this.velocity.y * dt;
 
     const ground = this.getGroundHeight(pos.x, pos.z);
-    if (pos.y - this.currentEyeHeight <= ground) {
-      pos.y = ground + this.currentEyeHeight;
-      if (!this.grounded && this.velocity.y < -5) this.onLand?.();
-      this.velocity.y = 0;
-      this.grounded = true;
-    } else {
-      this.grounded = false;
+    if (this.grounded && this.velocity.y <= 0) {
+      // Stick to the terrain while walking: applying gravity first made the
+      // player dip below the surface and pop back up every few frames.
+      const dropBelow = pos.y - this.currentEyeHeight - ground;
+      if (dropBelow <= 1.1) {
+        pos.y = ground + this.currentEyeHeight;
+        this.velocity.y = 0;
+      } else {
+        this.grounded = false; // genuinely walked off an edge
+      }
+    }
+
+    if (!this.grounded) {
+      this.velocity.y += GRAVITY * dt;
+      pos.y += this.velocity.y * dt;
+      if (pos.y - this.currentEyeHeight <= ground) {
+        pos.y = ground + this.currentEyeHeight;
+        if (this.velocity.y < -5) this.onLand?.();
+        this.velocity.y = 0;
+        this.grounded = true;
+      }
     }
   }
 }

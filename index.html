@@ -51,8 +51,8 @@
       pointer-events: none;
     }
     #stamina {
-      width: 140px;
-      height: 8px;
+      width: 260px;
+      height: 12px;
       border: 1px solid rgba(201, 180, 138, 0.5);
       background: rgba(0, 0, 0, 0.4);
     }
@@ -71,12 +71,45 @@
       pointer-events: none;
       z-index: 8;
     }
+    #changelog {
+      position: absolute;
+      right: 18px;
+      bottom: 14px;
+      max-width: min(340px, 32vw);
+      max-height: 46vh;
+      overflow-y: auto;
+      text-align: left;
+      font-size: 11px;
+      line-height: 1.5;
+      color: #c9b48a;
+      opacity: 0.85;
+      padding-right: 6px;
+    }
+    #changelog h4 {
+      margin: 0 0 4px;
+      letter-spacing: 3px;
+      font-size: 11px;
+      border-bottom: 1px solid rgba(201, 180, 138, 0.4);
+      padding-bottom: 3px;
+    }
+    #changelog .ver {
+      margin-top: 6px;
+      font-weight: bold;
+      color: #e4cf9c;
+    }
+    #changelog ul {
+      margin: 2px 0 0;
+      padding-left: 16px;
+    }
+    #changelog::-webkit-scrollbar { width: 4px; }
+    #changelog::-webkit-scrollbar-thumb { background: rgba(201, 180, 138, 0.35); }
   </style>
 </head>
 <body>
   <div id="overlay">
     <h1>The Crossing at Side Cut</h1>
-    <p>Click to begin &mdash; WASD to move, SHIFT to sprint, SPACE to jump, F for fullscreen</p>
+    <p>Click to begin &mdash; WASD to move, SHIFT to sprint, SPACE to jump,<br/>C to crouch, Q to glance back, F for fullscreen</p>
+    <div id="changelog"></div>
   </div>
   <div id="hud">
     <div id="stamina"><div id="stamina-fill"></div></div>

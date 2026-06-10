@@ -58,6 +58,34 @@ export class GameAudio {
     this.riverTarget = 0;
 
     this.startMusic();
+    this.startTracks();
+  }
+
+  // Real background music (Kevin MacLeod, CC-BY — credited in the README):
+  // a dark ambient bed for exploring and a pounding track for the chase,
+  // crossfaded by mode. The synth pads keep playing quietly underneath.
+  startTracks() {
+    const base = import.meta.env?.BASE_URL ?? '/';
+    const mkTrack = (file, max) => {
+      const el = new Audio(base + 'assets/' + file);
+      el.loop = true;
+      el.volume = 0;
+      el.play().catch(() => {});
+      return { el, target: 0, max };
+    };
+    this.tracks = {
+      ambient: mkTrack('ambient.mp3', 0.5),
+      chase: mkTrack('chase.mp3', 0.75),
+    };
+    this.tracks.ambient.target = this.tracks.ambient.max;
+    setInterval(() => {
+      for (const t of Object.values(this.tracks)) {
+        const v = t.el.volume + (t.target - t.el.volume) * 0.1;
+        t.el.volume = Math.min(1, Math.max(0, v));
+        // Keep paused-by-autoplay tracks retrying until they can start.
+        if (t.el.paused && t.target > 0) t.el.play().catch(() => {});
+      }
+    }, 120);
   }
 
   // Generative score: slow chord pads crossfading into each other, with a
@@ -154,12 +182,21 @@ export class GameAudio {
     this.musicMode = mode;
     const t = this.ctx.currentTime;
     const settings = {
-      overworld: { freq: 750, gain: 0.12 },
-      underground: { freq: 420, gain: 0.16 },
-      chase: { freq: 1800, gain: 0.28 },
+      overworld: { freq: 750, gain: 0.05 },
+      underground: { freq: 420, gain: 0.13 },
+      chase: { freq: 1800, gain: 0.1 },
     }[mode];
     this.musicFilter.frequency.setTargetAtTime(settings.freq, t, 1.5);
     this.musicOut.gain.setTargetAtTime(settings.gain, t, 1.5);
+
+    // Crossfade the real tracks: ambient bed for exploring (ducked in the
+    // basement so the dissonant pads own the space), full chase track when
+    // the Not-Deer is on you.
+    if (this.tracks) {
+      this.tracks.ambient.target =
+        mode === 'chase' ? 0 : mode === 'underground' ? 0.16 : this.tracks.ambient.max;
+      this.tracks.chase.target = mode === 'chase' ? this.tracks.chase.max : 0;
+    }
 
     if (mode === 'chase' && !this.pulseTimer) {
       const beat = () => {

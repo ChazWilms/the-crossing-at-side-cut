@@ -30,6 +30,12 @@ Pushes to `main` deploy automatically to GitHub Pages.
 | `src/data/map.json` | Top-down layout of the Blue Grass Island region |
 | `Images and JSON/` | Real-world reference photos and the original map data |
 
+## Credits
+
+- Music: "The Dread", "Five Armies" — Kevin MacLeod (incompetech.com),
+  licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+- Horse model: [three.js examples](https://github.com/mrdoob/three.js) (MIT)
+
 ## Roadmap
 
 - [x] PSX-style renderer (low-res, vertex jitter, affine textures)

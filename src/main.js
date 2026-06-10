@@ -17,8 +17,40 @@ const retro = new RetroRenderer();
 const composer = new EffectComposer(retro.renderer);
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
-const bloomPass = new UnrealBloomPass(new THREE.Vector2(RENDER_WIDTH, RENDER_HEIGHT), 1.2, 0.4, 0.85);
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(RENDER_WIDTH, RENDER_HEIGHT), 0.45, 0.5, 0.82);
 composer.addPass(bloomPass);
+
+// --- Version log shown on the menu screen ---
+const CHANGELOG = [
+  {
+    v: '0.2.0',
+    items: [
+      'Movement retuned: slower deliberate walk, sprint as a real choice, double-size stamina tank and a bigger bar',
+      'Fixed falling through the ground while running',
+      'River actually looks like water now, and flows',
+      'Real music: dark ambient track, switches to a chase track when it finds you',
+      'The Not-Deer rebuilt on a real animated quadruped — black, stretched, stuttering',
+      'Lantern sways with your actual footsteps and lags your turns',
+      'Night fog thickens properly; sunset sky fades out after dark',
+      'Performance: shadow casting limited to the sun',
+    ],
+  },
+  {
+    v: '0.1.0',
+    items: [
+      'The park, the crossing, the island, the tower, the descent',
+      'Lantern with fuel, crouch, glance-back, artifact encounter, chase, win/lose',
+    ],
+  },
+];
+const logEl = document.getElementById('changelog');
+if (logEl) {
+  logEl.innerHTML =
+    '<h4>UPDATE LOG</h4>' +
+    CHANGELOG.map(
+      (c) => `<div class="ver">v${c.v}</div><ul>${c.items.map((i) => `<li>${i}</li>`).join('')}</ul>`
+    ).join('');
+}
 
 const world = new World();
 world.build(scene);
@@ -141,6 +173,11 @@ function teleport(position, facing, toUnderground) {
     player.pitchObject.rotation.x = 0;
     player.velocity.set(0, 0, 0);
     fade.style.opacity = 0;
+    audio.setMusicMode(chaseActive ? 'chase' : toUnderground ? 'underground' : 'overworld');
+    // If it's hunting you, it follows you out of the tower.
+    if (chaseActive && !toUnderground) {
+      notDeer.position.set(world.doorPosition.x + 5, 0, world.doorPosition.z + 4);
+    }
   }, 420);
 }
 
@@ -157,17 +194,18 @@ function checkTransitions(p) {
   }
 }
 
-// Enable shadows globally for all built objects
+// Enable shadows on meshes; only the sun casts them. Every point light
+// casting shadows means six render passes each — it tanked the framerate.
 scene.traverse((child) => {
   if (child.isMesh) {
     child.castShadow = true;
     child.receiveShadow = true;
   }
-  if (child.isLight && child.type !== 'HemisphereLight') {
+  if (child.isLight && child.isDirectionalLight) {
     child.castShadow = true;
-    child.shadow.mapSize.width = 1024;
-    child.shadow.mapSize.height = 1024;
     child.shadow.bias = -0.001;
+  } else if (child.isLight) {
+    child.castShadow = false;
   }
 });
 
@@ -220,7 +258,8 @@ function animate() {
     player.setChaseMode(false);
     notDeer.reset(notDeerSpawn);
     world.setNightness(nightFactor, underground);
-    
+    audio.setMusicMode('overworld');
+
     // Quick win flash
     fade.style.backgroundColor = 'white';
     fade.style.opacity = 1;
@@ -267,7 +306,6 @@ function animate() {
   const p = player.yawObject.position;
   const ground = new THREE.Vector3(p.x, 0, p.z);
   checkTransitions(ground);
-  audio.setAmbience(world.windLevel(p.x, p.z), world.riverProximity(p.x, p.z));
   audio.setAmbience(world.windLevel(p.x, p.z), world.riverProximity(p.x, p.z));
   composer.render();
 }
