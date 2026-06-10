@@ -25,6 +25,14 @@ composer.addPass(bloomPass);
 // --- Version log shown on the menu screen ---
 const CHANGELOG = [
   {
+    v: '1.0.0',
+    items: [
+      'The full loop is here: cross at dusk, find the five effigies, open the tower, take what waits below, and outrun it home',
+      'Opening lines set the scene; surviving earns you a proper ending',
+      'Version number on the title screen',
+    ],
+  },
+  {
     v: '0.9.0',
     items: [
       'Compass strip up top: cardinal directions, diamonds for unfound effigies, the tower once it opens',
@@ -100,6 +108,7 @@ const CHANGELOG = [
     ],
   },
 ];
+document.getElementById('version').textContent = 'v' + CHANGELOG[0].v;
 const logEl = document.getElementById('changelog');
 if (logEl) {
   logEl.innerHTML =
@@ -317,8 +326,14 @@ overlay.addEventListener('click', () => {
   audio.start(); // must happen inside a user gesture
   retro.renderer.domElement.requestPointerLock();
 });
+let introShown = false;
 document.addEventListener('pointerlockchange', () => {
   overlay.classList.toggle('hidden', !!document.pointerLockElement);
+  if (document.pointerLockElement && !introShown) {
+    introShown = true;
+    setTimeout(() => showMessage('Blue Grass Island. October. The sun is going down.', 5500), 1200);
+    setTimeout(() => showMessage('Find the five effigies. They mark the way to the tower.', 6500), 8200);
+  }
 });
 
 // F toggles fullscreen; entering it can drop pointer lock, so re-grab it.
@@ -448,6 +463,7 @@ function animate() {
       `Escaped in ${secs}s${parseFloat(secs) < best ? ' — a new best.' : ` (best ${Math.min(best, parseFloat(secs)).toFixed(1)}s)`}`,
       6000
     );
+    setTimeout(() => showMessage('It does not cross the open ground. For now.', 7000), 7000);
 
     // Quick win flash
     fade.style.backgroundColor = 'white';
