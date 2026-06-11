@@ -3,7 +3,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { RetroRenderer, RENDER_WIDTH, RENDER_HEIGHT } from './retro.js';
-import { World } from './world.js';
+import { WorldV2 } from './worldv2.js';
 import { Player } from './player.js';
 import { GameAudio } from './audio.js';
 import { NotDeer } from './notdeer.js';
@@ -28,6 +28,15 @@ composer.addPass(bloomPass);
 
 // --- Version log shown on the menu screen ---
 const CHANGELOG = [
+  {
+    v: '2.0.0',
+    items: [
+      'FULL REDESIGN: the world is rebuilt from the official park trail map — the Maumee along the south, Blue Grass Island southwest with the stone crossing, the Riverview hub (parking, pavilion, shelter, playground), the Wood Duck Trail looping its slough in the eastern woods, the canal locks northwest, Wayne St from the north',
+      'Real PBR ground materials with normal maps: grass, dirt trails, asphalt, rock — light actually plays across surfaces now',
+      'Every objective relocated to the real geography (effigies, notes, the tower on the island)',
+      'The classic game remains playable at /v1/',
+    ],
+  },
   {
     v: '1.8.0',
     items: [
@@ -186,8 +195,12 @@ if (logEl) {
     ).join('');
 }
 
-const world = new World();
-world.build(scene);
+const world = new WorldV2();
+{
+  const t0 = performance.now();
+  world.build(scene);
+  console.log('WORLD BUILD ms', Math.round(performance.now() - t0));
+}
 
 // Texture sharpness at oblique angles + soft sky reflections on water,
 // car paint, and wet stone.
@@ -542,7 +555,7 @@ function animate() {
 
   // Win condition: reach the car
   const pPos = player.yawObject.position;
-  if (chaseActive && pPos.x < 30 && pPos.z < -100) {
+  if (chaseActive && pPos.x > -10 && pPos.x < 46 && pPos.z > -28 && pPos.z < -4) {
     chaseActive = false;
     nightFactor = 0;
     player.setChaseMode(false);
@@ -681,5 +694,9 @@ function animate() {
   audio.setAmbience(world.windLevel(p.x, p.z), world.riverProximity(p.x, p.z));
   updateCompass(p, player.yawObject.rotation.y);
   composer.render();
+  if (!window.__firstFrameLogged) {
+    window.__firstFrameLogged = true;
+    console.log('FIRST FRAME at ms', Math.round(performance.now()));
+  }
 }
 animate();

@@ -5,23 +5,23 @@ import { lambert } from './world.js';
 // followed the stones across. Walking up to one reads it.
 const NOTES = [
   {
-    x: 8.5,
-    z: -86,
+    x: -6,
+    z: 25,
     text: 'MISSING — Daniel R., 19. Last seen near the Blue Grass Island crossing, Oct 12. If seen, DO NOT APPROACH.',
   },
   {
-    x: -94,
-    z: -45,
+    x: -110,
+    z: 84,
     text: "Journal, p.1 — The stones line up when the water is low. Dan swears there's a tower on the island. There is no tower on any map.",
   },
   {
-    x: 4,
-    z: 18,
-    text: "Journal, p.2 — Something paced us in the treeline all afternoon. It stepped on the wrong beats. Deer don't do that.",
+    x: 130,
+    z: -12,
+    text: "Journal, p.2 — Something paced us along the Wood Duck loop all afternoon. It stepped on the wrong beats. Deer don't do that.",
   },
   {
-    x: 146,
-    z: 52,
+    x: -222,
+    z: 144,
     text: 'Journal, p.3 — It is not a deer. The door under the tower was open when we got here. Dan went down. I am going down after him.',
   },
   {

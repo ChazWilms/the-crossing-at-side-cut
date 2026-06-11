@@ -7,11 +7,11 @@ import * as tex from './textures.js';
 // twisted sticks with a guttering candle so it can be spotted at dusk,
 // plus a faint light pillar as a wayfinding aid.
 const SPOTS = [
-  { x: -18, z: -97, hint: 'by the playground' },
-  { x: -185, z: -138, hint: 'on the sledding hill, across the road' },
-  { x: -96, z: -4, hint: 'where the stones meet the island' },
-  { x: 35, z: 46, hint: 'at the bend in the forest path' },
-  { x: 128, z: 50, hint: 'near the east shore' },
+  { x: 14, z: 33, hint: 'by the playground' },
+  { x: -148, z: -82, hint: 'at the old canal locks' },
+  { x: 220, z: 16, hint: 'across the Wood Duck slough' },
+  { x: 170, z: 72, hint: 'down the Riverview Trail' },
+  { x: -168, z: 117, hint: 'where the stones meet the island' },
 ];
 
 export class Effigies {
