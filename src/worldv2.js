@@ -167,6 +167,7 @@ export class WorldV2 extends World {
     this.buildCrossing(scene);
     this.buildLocksAndCanal(scene);
     this.buildForest(scene);
+    this.buildUndergrowthV2(scene);
     this.buildBeachAndTower(scene);
     this.buildBollards(scene);
     this.buildDescent(scene);
@@ -253,7 +254,10 @@ export class WorldV2 extends World {
       const h = this.heightAt(x, z);
       pos.setY(i, h);
 
-      c.setRGB(1, 1, 1);
+      // Macro variation: big soft patches of warmer/cooler grass so the
+      // field doesn't read as one endless tile at distance.
+      const macro = this.rolling.noise2(x * 0.016 + 90, z * 0.016) * 0.5 + this.detail.noise2(x * 0.05 + 40, z * 0.05) * 0.2;
+      c.setRGB(1, 1, 1).lerp(new THREE.Color(0.82, 0.86, 0.62), Math.max(0, macro)).lerp(new THREE.Color(0.72, 0.78, 0.7), Math.max(0, -macro));
       // Mud below the waterline.
       if (h < -0.6) c.lerp(new THREE.Color(0.5, 0.44, 0.36), Math.min(1, (-0.6 - h) / 1.2));
       // Forest floor: eastern woods + island interior darker and browner.
@@ -522,6 +526,87 @@ export class WorldV2 extends World {
       scene.add(new THREE.Mesh(mergeGeometries(oakGeos), lambert({ map: tex.foliageTexture(3), color: 0xffffff, vertexColors: true })));
     }
     void saveBands;
+  }
+
+  // Ground-level life: grass tufts in the meadow and woods, reeds along
+  // the riverbank and the slough rim, deadfall in the eastern woods.
+  buildUndergrowthV2(scene) {
+    const tuftGeos = [];
+    let placed = 0;
+    let tries = 0;
+    while (placed < 850 && tries < 7000) {
+      tries++;
+      const x = THREE.MathUtils.lerp(-320, 300, Math.random());
+      const z = THREE.MathUtils.lerp(-190, 130, Math.random());
+      const h = this.heightAt(x, z);
+      if (h < -0.35) continue;
+      const r = this.hubRect;
+      if (x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1) continue;
+      if (World.distanceToPoints(this.protectPoints, x, z) < 2) continue;
+      if (this.roadPoints && World.distanceToPoints(this.roadPoints, x, z) < 4.5) continue;
+      const s = 0.7 + Math.random() * 0.8;
+      for (const rot of [0, Math.PI / 2]) {
+        const quad = new THREE.PlaneGeometry(s, s * 0.6);
+        quad.rotateY(rot + Math.random() * 0.6);
+        quad.translate(x, h + s * 0.27, z);
+        tuftGeos.push(quad);
+      }
+      placed++;
+    }
+    scene.add(
+      new THREE.Mesh(
+        mergeGeometries(tuftGeos),
+        lambert({ map: tex.grassBladeTexture(), alphaTest: 0.5, side: THREE.DoubleSide })
+      )
+    );
+
+    // Reeds wherever ground sits in the waterline band.
+    const stemGeos = [];
+    const tipGeos = [];
+    placed = 0;
+    tries = 0;
+    while (placed < 110 && tries < 4000) {
+      tries++;
+      const x = THREE.MathUtils.lerp(-320, 300, Math.random());
+      const nearSlough = Math.random() < 0.35;
+      const z = nearSlough
+        ? SLOUGH.center[1] + (Math.random() - 0.5) * SLOUGH.radii[1] * 3.2
+        : bankZ(x) + (Math.random() - 0.5) * 18;
+      const h = this.heightAt(nearSlough ? SLOUGH.center[0] + (Math.random() - 0.5) * SLOUGH.radii[0] * 2.2 : x, z);
+      if (h > -0.35 || h < -1.0) continue;
+      for (let r2 = 0; r2 < 3 + Math.floor(Math.random() * 3); r2++) {
+        const rx = x + (Math.random() - 0.5) * 1.6;
+        const rz = z + (Math.random() - 0.5) * 1.6;
+        const rh = 1.1 + Math.random() * 0.6;
+        const stem = new THREE.CylinderGeometry(0.025, 0.05, rh, 4);
+        stem.translate(rx, h + rh / 2, rz);
+        stemGeos.push(stem);
+        const tip = new THREE.CylinderGeometry(0.07, 0.07, 0.3, 4);
+        tip.translate(rx, h + rh + 0.1, rz);
+        tipGeos.push(tip);
+      }
+      placed++;
+    }
+    if (stemGeos.length) {
+      scene.add(new THREE.Mesh(mergeGeometries(stemGeos), lambert({ color: 0x5c6336 })));
+      scene.add(new THREE.Mesh(mergeGeometries(tipGeos), lambert({ color: 0x4a3526 })));
+    }
+
+    // Deadfall in the eastern woods.
+    const logMat = pbrMaterial('Bark012', 2);
+    const ew = layout.zones.easternWoods;
+    for (let i = 0; i < 8; i++) {
+      const x = ew.center[0] + (Math.random() * 2 - 1) * ew.radii[0] * 0.85;
+      const z = ew.center[1] + (Math.random() * 2 - 1) * ew.radii[1] * 0.85;
+      if (this.heightAt(x, z) < -0.3) continue;
+      if (World.distanceToPoints(this.protectPoints, x, z) < 3.5) continue;
+      const len = 4 + Math.random() * 3.5;
+      const log = new THREE.Mesh(jitterGeometry(new THREE.CylinderGeometry(0.3, 0.38, len, 8), 0.1), logMat);
+      log.rotation.z = Math.PI / 2;
+      log.rotation.y = Math.random() * Math.PI;
+      log.position.set(x, this.heightAt(x, z) + 0.26, z);
+      scene.add(log);
+    }
   }
 
   buildMist(scene) {

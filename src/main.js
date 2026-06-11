@@ -29,6 +29,13 @@ composer.addPass(bloomPass);
 // --- Version log shown on the menu screen ---
 const CHANGELOG = [
   {
+    v: '2.1.0',
+    items: [
+      'The meadow breathes: soft macro patches of warm and cool grass break up the distance',
+      'Ground cover returns — 850 grass tufts, reeds along the riverbank and slough, deadfall in the eastern woods',
+    ],
+  },
+  {
     v: '2.0.0',
     items: [
       'FULL REDESIGN: the world is rebuilt from the official park trail map — the Maumee along the south, Blue Grass Island southwest with the stone crossing, the Riverview hub (parking, pavilion, shelter, playground), the Wood Duck Trail looping its slough in the eastern woods, the canal locks northwest, Wayne St from the north',
