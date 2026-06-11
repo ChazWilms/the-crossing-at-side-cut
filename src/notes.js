@@ -21,7 +21,7 @@ const NOTES = [
   },
   {
     x: -222,
-    z: 144,
+    z: 152,
     text: 'Journal, p.3 — It is not a deer. The door under the tower was open when we got here. Dan went down. I am going down after him.',
   },
   {

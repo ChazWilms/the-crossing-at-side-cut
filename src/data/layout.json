@@ -5,34 +5,252 @@
     "notes": "Traced 2026-06-10 for the v2 redesign. River runs along the south edge WSW-ENE; Blue Grass Island southwest; eastern woods hold the Wood Duck loop and slough."
   },
   "river": {
-    "bank": [[-320, 95], [-180, 105], [-40, 118], [120, 132], [300, 148]],
+    "bank": [
+      [
+        -320,
+        95
+      ],
+      [
+        -180,
+        105
+      ],
+      [
+        -40,
+        118
+      ],
+      [
+        120,
+        132
+      ],
+      [
+        300,
+        148
+      ]
+    ],
     "flow": "ENE",
     "width": 130
   },
-  "blueGrassIsland": { "center": [-235, 150], "radii": [95, 38], "crossing": [-165, 112] },
+  "blueGrassIsland": {
+    "center": [
+      -235,
+      158
+    ],
+    "radii": [
+      95,
+      38
+    ],
+    "crossing": [
+      -165,
+      112
+    ]
+  },
   "riverviewArea": {
-    "parking": { "center": [18, -18], "size": [46, 14] },
-    "rotaryPavilion": [-42, -8],
-    "riverviewShelter": [-8, 28],
-    "playground": [12, 30],
-    "restroom": [30, 12]
+    "parking": {
+      "center": [
+        18,
+        -18
+      ],
+      "size": [
+        46,
+        14
+      ]
+    },
+    "rotaryPavilion": [
+      -42,
+      -8
+    ],
+    "riverviewShelter": [
+      -8,
+      28
+    ],
+    "playground": [
+      12,
+      30
+    ],
+    "restroom": [
+      30,
+      12
+    ]
   },
   "trails": {
-    "riverviewTrail": [[-30, 45], [30, 58], [95, 66], [170, 74], [240, 70]],
-    "woodDuckTrail": [[80, 10], [130, -14], [195, -10], [235, 14], [195, 38], [120, 36], [80, 10]],
-    "canalLocksTrail": [[-250, -95], [-180, -88], [-105, -76], [-40, -62]],
-    "islandSpur": [[-60, 60], [-110, 85], [-165, 112]]
+    "riverviewTrail": [
+      [
+        -30,
+        45
+      ],
+      [
+        30,
+        58
+      ],
+      [
+        95,
+        66
+      ],
+      [
+        170,
+        74
+      ],
+      [
+        240,
+        70
+      ]
+    ],
+    "woodDuckTrail": [
+      [
+        80,
+        10
+      ],
+      [
+        130,
+        -14
+      ],
+      [
+        195,
+        -10
+      ],
+      [
+        235,
+        14
+      ],
+      [
+        195,
+        38
+      ],
+      [
+        120,
+        36
+      ],
+      [
+        80,
+        10
+      ]
+    ],
+    "canalLocksTrail": [
+      [
+        -250,
+        -95
+      ],
+      [
+        -180,
+        -88
+      ],
+      [
+        -105,
+        -76
+      ],
+      [
+        -40,
+        -62
+      ]
+    ],
+    "islandSpur": [
+      [
+        -60,
+        60
+      ],
+      [
+        -110,
+        85
+      ],
+      [
+        -165,
+        112
+      ]
+    ]
   },
-  "woodDuckSlough": { "center": [160, 12], "radii": [58, 14] },
-  "canalLocks": [{ "pos": [-160, -86], "name": "Lock 3" }, { "pos": [-120, -80], "name": "Lock 4" }],
-  "rangerArea": { "center": [-20, -72], "size": [26, 18] },
+  "woodDuckSlough": {
+    "center": [
+      160,
+      12
+    ],
+    "radii": [
+      58,
+      14
+    ]
+  },
+  "canalLocks": [
+    {
+      "pos": [
+        -160,
+        -86
+      ],
+      "name": "Lock 3"
+    },
+    {
+      "pos": [
+        -120,
+        -80
+      ],
+      "name": "Lock 4"
+    }
+  ],
+  "rangerArea": {
+    "center": [
+      -20,
+      -72
+    ],
+    "size": [
+      26,
+      18
+    ]
+  },
   "roads": {
-    "wayneSt": [[60, -200], [55, -120], [40, -60], [22, -32]],
-    "parkDrive": [[22, -32], [-10, -26], [-46, -20]]
+    "wayneSt": [
+      [
+        60,
+        -200
+      ],
+      [
+        55,
+        -120
+      ],
+      [
+        40,
+        -60
+      ],
+      [
+        22,
+        -32
+      ]
+    ],
+    "parkDrive": [
+      [
+        22,
+        -32
+      ],
+      [
+        -10,
+        -26
+      ],
+      [
+        -46,
+        -20
+      ]
+    ]
   },
   "zones": {
-    "mownField": { "center": [-60, 10], "radii": [120, 70] },
-    "easternWoods": { "center": [165, 8], "radii": [120, 70] },
-    "riverWoods": { "along": "river bank, 18m deep" }
+    "mownField": {
+      "center": [
+        -60,
+        10
+      ],
+      "radii": [
+        120,
+        70
+      ]
+    },
+    "easternWoods": {
+      "center": [
+        165,
+        8
+      ],
+      "radii": [
+        120,
+        70
+      ]
+    },
+    "riverWoods": {
+      "along": "river bank, 18m deep"
+    }
   }
 }

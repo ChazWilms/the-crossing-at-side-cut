@@ -56,7 +56,7 @@ export class WorldV2 extends World {
     super();
     this.spawn = new THREE.Vector3(18, 0, -12);
     // The tower stands at the heart of the island.
-    this.towerPosition = new THREE.Vector3(-252, 0, 148);
+    this.towerPosition = new THREE.Vector3(-252, 0, 156);
     this.hubRect = { x0: -70, x1: 70, z0: -50, z1: 58 };
   }
 
@@ -107,7 +107,7 @@ export class WorldV2 extends World {
     }
 
     // Crossing shallows by the island spur.
-    if (x > -185 && x < -145 && z > 100 && z < 122) h = Math.max(h, -1.1);
+    if (x > -185 && x < -145 && z > 98 && z < 128) h = Math.max(h, -1.1);
 
     // Walkable corridors under every trail.
     if (flags & 1) {
@@ -189,7 +189,7 @@ export class WorldV2 extends World {
       woodDuck: layout.trails.woodDuckTrail,
       canal: layout.trails.canalLocksTrail,
       spur: layout.trails.islandSpur,
-      island: [[-167, 116], [-192, 130], [-222, 142], [-252, 148]],
+      island: [[-167, 120], [-192, 138], [-222, 150], [-252, 156]],
     };
     this.trailSamples = {};
     for (const [k, line] of Object.entries(this.trailLines)) this.trailSamples[k] = sample(line);
@@ -314,9 +314,34 @@ export class WorldV2 extends World {
     scene.add(smesh);
   }
 
+  // Feathered dirt apron blending a built footprint into the grass.
+  addApron(scene, x, z, w, d) {
+    const apron = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, d, 6, 6),
+      lambert({ map: tex.apronTexture(), transparent: true, depthWrite: false })
+    );
+    apron.rotation.x = -Math.PI / 2;
+    // The hub is flattened ground, so a level decal sits flush.
+    apron.position.set(x, this.meshHeightAt(x, z) + 0.045, z);
+    scene.add(apron);
+  }
+
   // The Riverview hub: parking, pavilion, shelter, playground, furnishings.
   buildHub(scene) {
     const lot = layout.riverviewArea.parking;
+    this.addApron(scene, lot.center[0], lot.center[1], lot.size[0] + 14, lot.size[1] + 12);
+    this.addApron(
+      scene,
+      layout.riverviewArea.rotaryPavilion[0],
+      layout.riverviewArea.rotaryPavilion[1],
+      18, 16
+    );
+    this.addApron(
+      scene,
+      layout.riverviewArea.riverviewShelter[0],
+      layout.riverviewArea.riverviewShelter[1],
+      16, 14
+    );
     const lotMesh = new THREE.Mesh(
       new THREE.PlaneGeometry(lot.size[0], lot.size[1], 12, 4),
       lambert({ map: tex.parkingLotTexture() })
@@ -361,10 +386,10 @@ export class WorldV2 extends World {
   buildCrossing(scene) {
     const stoneMat = pbrMaterial('Rock035', 2);
     const [cx0, cz0] = layout.blueGrassIsland.crossing;
-    for (let i = 0; i < 6; i++) {
-      const t = i / 5;
-      const x = cx0 + Math.sin(i * 2.0) * 1.6;
-      const z = THREE.MathUtils.lerp(cz0 - 7, cz0 + 6, t);
+    for (let i = 0; i < 9; i++) {
+      const t = i / 8;
+      const x = cx0 + Math.sin(i * 2.0) * 1.8;
+      const z = THREE.MathUtils.lerp(cz0 - 8, cz0 + 12, t);
       const r = 1.25 + Math.random() * 0.45;
       const stone = new THREE.Mesh(jitterGeometry(new THREE.CylinderGeometry(r, r * 1.2, 2.0, 9), 0.2), stoneMat);
       stone.position.set(x, 0.32 - 1.0, z);

@@ -309,6 +309,32 @@ export function pathTexture() {
   });
 }
 
+// Dirt ground decal with a radial alpha feather — aprons under built
+// structures so they don't end in hard rectangles on the grass.
+export function apronTexture() {
+  return makeTex(256, (ctx, S) => {
+    ctx.clearRect(0, 0, S, S);
+    ctx.fillStyle = '#8a6f4a';
+    ctx.fillRect(0, 0, S, S);
+    blotches(ctx, S, ['122,94,56', '160,134,90', '106,82,48'], 22, 24, 80, 0.3);
+    specks(ctx, S, ['#7a5e38', '#a08a5e', '#6a522f'], 3200, 2, 1);
+    const img = ctx.getImageData(0, 0, S, S);
+    const c = S / 2;
+    for (let y = 0; y < S; y++) {
+      for (let x = 0; x < S; x++) {
+        const d = Math.hypot(x - c, y - c) / c; // 0 center, 1 corner-ish
+        const a = THREE_clamp01(1 - (d - 0.55) / 0.4);
+        const idx = (y * S + x) * 4 + 3;
+        img.data[idx] = Math.min(img.data[idx], Math.floor(255 * a * a));
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  });
+}
+function THREE_clamp01(v) {
+  return Math.min(1, Math.max(0, v));
+}
+
 // Two-lane road: asphalt with a dashed yellow center line running along v.
 export function roadTexture() {
   return makeTex(256, (ctx, S) => {

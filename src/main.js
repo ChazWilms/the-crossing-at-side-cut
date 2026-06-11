@@ -29,6 +29,13 @@ composer.addPass(bloomPass);
 // --- Version log shown on the menu screen ---
 const CHANGELOG = [
   {
+    v: '2.2.0',
+    items: [
+      'Worn dirt aprons blend the parking lot, pavilion, and shelter into the grass',
+      'The crossing is a real channel now: the island sits further out, nine stones span the water',
+    ],
+  },
+  {
     v: '2.1.0',
     items: [
       'The meadow breathes: soft macro patches of warm and cool grass break up the distance',
